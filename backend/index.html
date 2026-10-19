@@ -10,7 +10,7 @@ button{padding:9px 13px;background:#174679;color:white;border:0;border-radius:8p
 button:disabled{opacity:.5;cursor:not-allowed}button.secondary{background:#eef3f8;color:#174679}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
 table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5eaf0;overflow-wrap:anywhere}
-th{color:#60758b}.scroll{overflow:auto}#notice{white-space:pre-wrap;color:#315570}#qr{max-width:240px;display:block;margin-top:12px}
+th{color:#60758b}.scroll{overflow:auto}#notice{white-space:pre-wrap;color:#315570}#qr{max-width:240px;display:block;margin-top:12px}#qr[hidden]{display:none}
 .status{color:#b05214;font-weight:600}small{color:#60758b}
 </style></head><body>
 <header><div><h1>小霸王 · XiaoBaWang</h1><small>Telegram → WhatsApp · 多账号与群组路由</small></div><span>V0.2 · 仅模拟，不会真实发送</span></header>
@@ -44,7 +44,7 @@ async function refresh(){
  const box=document.createElement('div');
  if(d.status==='pending_review'){for(const [label,path] of [['模拟通过','simulate'],['拒绝','reject']]){const btn=element('button',label);btn.style.marginRight='6px';btn.onclick=()=>action('/api/deliveries/'+d.id+'/'+path,'POST');box.append(btn)}}
  return [d.tg_account+' / '+d.tg_chat_id,d.text.slice(0,140),d.status,box]}));
- try{const accounts=await api('/api/whatsapp/sessions');$('sessions').textContent=accounts.map(a=>a.name+'：'+a.status).join('、')||'暂无活跃账号'}catch(e){$('sessions').textContent='WhatsApp 桥接未连通'}
+ try{const accounts=await api('/api/whatsapp/sessions');$('sessions').textContent=accounts.map(a=>a.name+'：'+a.status).join('、')||'暂无活跃账号'}catch(e){$('sessions').textContent='WhatsApp 桥接未连通。请检查 Node 服务是否在本机 3101 端口运行，以及 .logs/whatsapp-stderr.log。'}
  show('数据已更新 · 所有发送只模拟');
  }catch(e){show(e.message)}
 }
