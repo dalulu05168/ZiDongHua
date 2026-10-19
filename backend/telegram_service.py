@@ -31,25 +31,40 @@ class _Blob(ctypes.Structure):
 
 
 def _dpapi(data, *, decrypt=False):
-    """Encrypt API credentials for the current Windows user using native DPAPI."""
+    """Use current-user Windows DPAPI. Neither API hash nor session gets logged."""
     if sys.platform != "win32":
         raise TelegramError("Credential persistence requires Windows; use environment credentials for local development")
+    crypt = ctypes.WinDLL("crypt32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    protect = crypt.CryptProtectData
+    protect.argtypes = [
+        ctypes.POINTER(_Blob), ctypes.c_wchar_p, ctypes.POINTER(_Blob),
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(_Blob),
+    ]
+    protect.restype = ctypes.c_bool
+    unprotect = crypt.CryptUnprotectData
+    unprotect.argtypes = [
+        ctypes.POINTER(_Blob), ctypes.POINTER(ctypes.c_wchar_p),
+        ctypes.POINTER(_Blob), ctypes.c_void_p, ctypes.c_void_p,
+        ctypes.c_uint32, ctypes.POINTER(_Blob),
+    ]
+    unprotect.restype = ctypes.c_bool
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
     source = ctypes.create_string_buffer(data, len(data))
     input_blob = _Blob(len(data), ctypes.cast(source, ctypes.POINTER(ctypes.c_byte)))
     output = _Blob()
-    crypt = ctypes.windll.crypt32
-    operation = crypt.CryptUnprotectData if decrypt else crypt.CryptProtectData
     if decrypt:
-        ok = operation(ctypes.byref(input_blob), None, None, None, None, 0, ctypes.byref(output))
+        ok = unprotect(ctypes.byref(input_blob), None, None, None, None, 0, ctypes.byref(output))
     else:
-        ok = operation(ctypes.byref(input_blob), None, None, None, None, None, 0, ctypes.byref(output))
+        ok = protect(ctypes.byref(input_blob), None, None, None, None, 0, ctypes.byref(output))
     if not ok:
-        raise TelegramError("Windows could not unlock local Telegram credentials")
+        error_code = ctypes.get_last_error()
+        raise TelegramError("Windows DPAPI could not protect local credentials (error " + str(error_code) + ")")
     try:
         return ctypes.string_at(output.pbData, output.cbData)
     finally:
-        ctypes.windll.kernel32.LocalFree(output.pbData)
-
+        kernel.LocalFree(ctypes.cast(output.pbData, ctypes.c_void_p))
 
 class TelegramService:
     def __init__(self, data_dir, on_message):
