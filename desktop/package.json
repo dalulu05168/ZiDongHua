@@ -17,8 +17,14 @@
     "appId": "com.xiaobawang.desktop",
     "productName": "小霸王",
     "copyright": "Copyright XiaoBaWang",
-    "directories": {"output": "release"},
-    "files": ["main.cjs", "preload.cjs", "package.json"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
     "asar": true,
     "extraResources": [
       {
@@ -42,7 +48,14 @@
       }
     ],
     "win": {
-      "target": [{"target": "nsis", "arch": ["x64"]}],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "artifactName": "XiaoBaWang-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
@@ -50,7 +63,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false
     }
   }
 }
