@@ -16,7 +16,9 @@ def test_chat_home_and_settings(monkeypatch):
             assert 'id="routeForm"' in page.text
             assert 'class="send" disabled' in page.text
             assert client.get("/settings").status_code == 200
-            assert "管理端授权" in client.get("/settings").text
+            assert "多账号聊天工作台" in client.get("/settings").text
+            assert "V0.2 · 仅模拟" not in client.get("/settings").text
+            assert 'id="settingsModal"' in client.get("/").text
 
 
 def test_readonly_whatsapp_chat_bridge(monkeypatch):
