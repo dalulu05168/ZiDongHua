@@ -62,3 +62,23 @@ def test_telegram_threads_only_after_matching_enabled_route(monkeypatch):
             messages=client.get("/api/chat/telegram/tg1/-10055/messages",headers=headers)
             assert messages.json()["messages"][0]["text"]=="A sample source message"
             assert messages.json()["sending_enabled"] is False
+
+
+def test_pause_saved_whatsapp_account_requires_admin(monkeypatch):
+    """Account pause is a local credential-preserving control, not a message send."""
+    with tempfile.TemporaryDirectory() as tmp:
+        monkeypatch.setenv("XBW_DB_PATH", tmp + "/db.sqlite3")
+        monkeypatch.setenv("XBW_API_KEY", "admin_test")
+        calls = []
+        def fake_bridge(method, path):
+            calls.append((method, path))
+            return {"name": "wa1", "status": "paused", "credentials_preserved": True}
+        monkeypatch.setattr("backend.app.bridge", fake_bridge)
+        with TestClient(app) as client:
+            url = "/api/whatsapp/sessions/wa1/pause"
+            assert client.post(url).status_code == 401
+            assert client.post("/api/whatsapp/sessions/../pause", headers={"X-API-Key": "admin_test"}).status_code in (404, 422)
+            res = client.post(url, headers={"X-API-Key": "admin_test"})
+            assert res.status_code == 200
+            assert res.json()["credentials_preserved"] is True
+            assert calls == [("POST", "/v1/sessions/wa1/pause")]
