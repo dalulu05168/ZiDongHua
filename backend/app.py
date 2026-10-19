@@ -114,7 +114,8 @@ def homepage():
 
 @app.get("/settings", response_class=HTMLResponse)
 def advanced_settings():
-    return (ROOT / "index.html").read_text(encoding="utf-8")
+    # Deprecated V0.2 form page is deliberately not exposed to desktop users.
+    return (ROOT / "chat.html").read_text(encoding="utf-8")
 
 @app.get("/health")
 def health():
