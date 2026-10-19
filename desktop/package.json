@@ -38,12 +38,14 @@
           "bridge.mjs",
           "chatstore.mjs",
           "lifecycle.mjs",
-          "package.json",
-          "node_modules/**/*",
-          "!**/auth/**",
-          "!**/.env",
-          "!**/*.session",
-          "!**/*.log"
+          "package.json"
+        ]
+      },
+      {
+        "from": "../integrations/whatsapp/node_modules",
+        "to": "bridge/node_modules",
+        "filter": [
+          "**/*"
         ]
       }
     ],
