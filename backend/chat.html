@@ -79,7 +79,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="sidehead">
 <div class="topline"><div><h1>聊天</h1><div class="hint">小霸王 · 多账号工作台</div></div><button class="iconbtn" id="refresh" title="同步消息">↻</button></div>
 <div class="segment"><button id="waTab" class="on">WhatsApp</button><button id="tgTab">Telegram</button></div>
-<div class="accountline"><select id="accountSelect" aria-label="选择账号"><option value="">尚无连接账号</option></select><button class="iconbtn" id="addAccount" title="连接或恢复 WhatsApp 账号">＋</button><button class="iconbtn" id="pauseAccount" title="暂停选中账号，保留扫码凭据">Ⅱ</button></div>
+<div class="accountline"><select id="accountSelect" aria-label="选择账号"><option value="">尚无连接账号</option></select><button class="iconbtn" id="addAccount" title="连接或恢复 WhatsApp 账号">＋</button><button class="iconbtn" id="pauseAccount" title="暂停选中账号，保留扫码凭据">Ⅱ</button><button class="iconbtn" id="tgGroupsButton" title="选择要监听的 Telegram 群组" hidden>☰</button></div>
 <input class="search" id="search" placeholder="搜索联系人或群组" aria-label="搜索会话">
 </div>
 <div class="statusline" id="sideStatus">等待授权…</div>
@@ -126,6 +126,30 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="muted" id="pairStatus">未发起连接</div><img id="pairQr" alt="WhatsApp 扫码二维码" hidden>
 <button class="secondary" id="pairRefresh">刷新扫码状态</button><button class="secondary" id="pairClose">关闭</button>
 </div></div>
+<div class="modalbg" id="tgLoginModal" hidden><div class="modal">
+<h2>连接 Telegram 账号</h2>
+<p>仅首次登录需要 Telegram API ID、API Hash、手机号、验证码与可能的两步验证密码。全部在小霸王窗口内输入；授权保存在当前 Windows 用户目录。不会发送聊天消息。</p>
+<input id="tgAlias" placeholder="账号别名，如 tg_01" aria-label="Telegram 账号别名" autocomplete="off">
+<input id="tgApiId" placeholder="Telegram API ID（数字）" inputmode="numeric" aria-label="Telegram API ID" autocomplete="off">
+<input id="tgApiHash" type="password" placeholder="Telegram API Hash" aria-label="Telegram API Hash" autocomplete="off">
+<input id="tgPhone" type="tel" placeholder="手机号，含国家码，例如 +40123456789" aria-label="Telegram 手机号" autocomplete="tel">
+<button class="primary" id="tgSendCode">发送 Telegram 验证码</button>
+<div class="detailbox" id="tgCodeStep" hidden>
+<input id="tgCode" autocomplete="one-time-code" placeholder="Telegram 收到的验证码" aria-label="Telegram 验证码">
+<input id="tgPassword" type="password" autocomplete="off" placeholder="如启用两步验证，在此输入密码" aria-label="Telegram 两步验证密码">
+<button class="primary" id="tgVerify">验证并连接账号</button>
+</div>
+<p class="muted" id="tgLoginStatus" role="status">本程序不自带你的 Telegram API 凭据，需要首次输入后才能授权。</p>
+<button class="secondary" id="tgLoginClose">关闭</button>
+</div></div>
+<div class="modalbg" id="tgGroupsModal" hidden><div class="modal">
+<h2>Telegram 群组监听</h2>
+<p>勾选需要监听的已加入群组。只读取选择后新收到的文本消息；没有任何对外发送行为。</p>
+<div id="tgGroupList" style="max-height:340px;overflow-y:auto"></div>
+<p id="tgGroupStatus" role="status" class="muted"></p>
+<button class="primary" id="tgGroupSave">保存监听群组</button>
+<button class="secondary" id="tgGroupClose">关闭</button>
+</div></div>
 <div class="modalbg" id="settingsModal" hidden><div class="modal"><h2>小霸王 · 系统设置</h2><p>这里仅展示必要的本机服务状态，群组路由请在右侧操作。不会再显示旧版 V0.2 表单后台。</p><div class="detailbox"><div class="fieldlabel">当前模式</div><div class="detailval">只读消息 / 审核模拟；真实发送关闭</div><div class="fieldlabel">系统状态</div><div class="detailval" id="settingStatus">检查中</div><div class="fieldlabel">Chatwoot</div><div class="detailval" id="settingChatwoot">尚未配置</div></div><button class="primary" id="settingClose">返回聊天</button></div></div>
 <div class="modalbg" id="reviewModal" hidden>
 <div class="modal"><h2>待审核消息</h2><p>这里只能模拟通过或拒绝，绝不会实际群发。</p><div id="reviewList"></div><button class="secondary" id="reviewClose">关闭</button></div></div>
@@ -133,7 +157,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <script>
 const $=id=>document.getElementById(id);
 let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false,pairChecking=false;
-const state={sessions:[], tgThreads:[], bridgeOnline:false};
+const state={sessions:[], tgThreads:[], tgAccounts:[], bridgeOnline:false};
 function notify(text){const n=$('notice');n.textContent=String(text);n.hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.hidden=true,4300)}
 async function api(path,method='GET',data) {
   if(!adminKey)throw Error('请先管理授权');
@@ -145,11 +169,11 @@ function clearElement(node){node.replaceChildren()}
 function child(tag,txt,cls){const el=document.createElement(tag);if(txt!==undefined)el.textContent=String(txt);if(cls)el.className=cls;return el}
 function chosen(){return threadData.find(t=>t.id===activeChat)}
 function showSide(msg){$('sideStatus').textContent=msg}
-function setChannel(next){channel=next;activeChat=null;$('waTab').classList.toggle('on',next==='wa');$('tgTab').classList.toggle('on',next==='tg');$('addAccount').hidden=next!=='wa';$('pauseAccount').hidden=next!=='wa';renderAccounts();loadThreads()}
+function setChannel(next){channel=next;activeChat=null;$('waTab').classList.toggle('on',next==='wa');$('tgTab').classList.toggle('on',next==='tg');$('pauseAccount').hidden=next!=='wa';$('tgGroupsButton').hidden=next!=='tg';$('addAccount').title=next==='tg'?'连接 Telegram 账号':'连接 WhatsApp 账号';renderAccounts();loadThreads()}
 function renderAccounts(){
   const select=$('accountSelect');clearElement(select);
-  const options=channel==='wa'?state.sessions.map(s=>({id:s.name,label:s.name+' · '+s.status})): [...new Set(state.tgThreads.map(t=>t.tg_account))].map(t=>({id:t,label:t}));
-  if(!options.length){select.append(child('option',channel==='wa'?'尚无已启动账号':'没有已监听的 TG 群'));select.value='';account='';return}
+  const options=channel==='wa'?state.sessions.map(s=>({id:s.name,label:s.name+' · '+s.status})): state.tgAccounts.map(t=>({id:t.alias,label:t.alias+' · '+t.status}));
+  if(!options.length){select.append(child('option',channel==='wa'?'尚无已启动账号':'点击＋授权 Telegram 账号'));select.value='';account='';return}
   options.forEach(o=>{const opt=child('option',o.label);opt.value=o.id;select.append(opt)});
   if(!options.some(o=>o.id===account))account=options[0].id;
   select.value=account;
@@ -165,6 +189,7 @@ async function syncCore(silent=false){
   try{
     const [tg,rulesResponse]=await Promise.all([api('/api/chat/telegram/threads'),api('/api/routes')]);
     state.tgThreads=tg;routes=rulesResponse;
+    try{state.tgAccounts=await api('/api/telegram/accounts')}catch(e){state.tgAccounts=[]}
     try{state.sessions=await api('/api/whatsapp/sessions');state.bridgeOnline=true}
     catch(e){state.sessions=[];state.bridgeOnline=false;if(!silent)notify('WhatsApp 桥接尚未连接，请先检查本机服务')}
     renderAccounts();
@@ -177,11 +202,19 @@ async function loadThreads(preserve=false){
   const old=activeChat;
   threadData=[];
   if(channel==='tg'){
-    threadData=state.tgThreads.filter(t=>t.tg_account===account).map(t=>({
+    let monitors=[];
+    if(account){try{monitors=await api('/api/telegram/accounts/'+encodeURIComponent(account)+'/monitors')}catch(e){showSide('群组列表暂不可用：'+e.message)}}
+    const observed=state.tgThreads.filter(t=>t.tg_account===account);
+    threadData=monitors.filter(t=>t.enabled).map(g=>{
+      const seen=observed.find(t=>t.tg_chat_id===g.chat_id);
+      return {id:g.chat_id,title:g.title||('Telegram 群 '+g.chat_id),preview:seen?.preview||'等待该群的新消息',count:seen?.observed_messages||0,time:seen?.last_time||'',kind:'tg'}
+    });
+    const activeIds=new Set(threadData.map(x=>x.id));
+    for(const t of observed){if(!activeIds.has(t.tg_chat_id))threadData.push({
       id:t.tg_chat_id,title:'Telegram 群 '+t.tg_chat_id,preview:t.preview,
       count:t.observed_messages,time:t.last_time,kind:'tg'
-    }));
-    showSide(threadData.length+' 个已监听群组 · 仅已入库的消息');
+    })}
+    showSide(account?(threadData.length+' 个 Telegram 群组 · 只读消息'):'点击＋授权 Telegram 账号');
   } else if(account&&state.bridgeOnline){
     const online=state.sessions.find(s=>s.name===account);
     if(online?.status==='connected'){
@@ -316,8 +349,83 @@ $('adminKey').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').cl
 $('waTab').onclick=()=>setChannel('wa');$('tgTab').onclick=()=>setChannel('tg');
 $('accountSelect').onchange=e=>{account=e.target.value;activeChat=null;loadThreads()};
 $('search').oninput=renderThreads;$('refresh').onclick=()=>syncCore();
-$('addAccount').onclick=()=>{const chosen=state.sessions.find(s=>s.name===account);$('newAlias').value=chosen&&chosen.status!=='connected'?chosen.name:'';$('pairModal').hidden=false;$('pairQr').hidden=true};
+$('addAccount').onclick=()=>{if(channel==='tg'){$('tgAlias').value=account||'';$('tgLoginModal').hidden=false;return}const chosen=state.sessions.find(s=>s.name===account);$('newAlias').value=chosen&&chosen.status!=='connected'?chosen.name:'';$('pairModal').hidden=false;$('pairQr').hidden=true};
 $('pauseAccount').onclick=async()=>{if(channel!=='wa'||!account)return notify('请先选择 WhatsApp 账号');const current=account;try{await api('/api/whatsapp/sessions/'+encodeURIComponent(current)+'/pause','POST');await syncCore(true);notify('账号 '+current+' 已暂停，授权凭据已保留，可再次连接')}catch(e){notify('暂停失败：'+e.message)}};
+// One-time Telegram authorization, entirely inside the local desktop interface.
+$('tgSendCode').onclick=async()=>{
+  const alias=$('tgAlias').value.trim(),id=Number($('tgApiId').value.trim());
+  if(!/^[A-Za-z0-9_-]{1,64}$/.test(alias)||!Number.isSafeInteger(id)||id<=0){
+    $('tgLoginStatus').textContent='请输入账号别名及有效 API ID';return
+  }
+  $('tgSendCode').disabled=true;
+  $('tgLoginStatus').textContent='正在连接 Telegram 并请求验证码…';
+  try{
+    const response=await api('/api/telegram/accounts/start','POST',{
+      alias,api_id:id,api_hash:$('tgApiHash').value.trim(),phone:$('tgPhone').value.trim()
+    });
+    $('tgLoginStatus').textContent='Telegram 验证码已发送。请输入验证码完成授权。';
+    $('tgCodeStep').hidden=false;$('tgApiHash').value='';
+    await syncCore(true);
+  }catch(e){$('tgLoginStatus').textContent='登录失败：'+e.message}
+  finally{$('tgSendCode').disabled=false}
+};
+$('tgVerify').onclick=async()=>{
+  const alias=$('tgAlias').value.trim();$('tgVerify').disabled=true;
+  try{
+    const response=await api('/api/telegram/accounts/'+encodeURIComponent(alias)+'/verify','POST',{
+      code:$('tgCode').value.trim(),password:$('tgPassword').value
+    });
+    if(response.status==='password_required'){
+      $('tgLoginStatus').textContent='此账号已启用两步验证，请填写下面的密码再次点击验证。';return
+    }
+    $('tgPhone').value='';$('tgCode').value='';$('tgPassword').value='';
+    $('tgApiId').value='';$('tgApiHash').value='';$('tgCodeStep').hidden=true;
+    $('tgLoginModal').hidden=true;channel='tg';account=alias;
+    await syncCore(true);notify('Telegram 已授权，请点击群组按钮选择监听范围');
+    await openTgGroups();
+  }catch(e){$('tgLoginStatus').textContent='验证失败：'+e.message}
+  finally{$('tgVerify').disabled=false}
+};
+$('tgLoginClose').onclick=()=>{
+  $('tgLoginModal').hidden=true;$('tgApiHash').value='';$('tgCode').value='';$('tgPassword').value=''
+};
+let tgVisibleGroups=[];
+async function openTgGroups(){
+  if(!account){notify('请先选择 Telegram 账号');return}
+  $('tgGroupsModal').hidden=false;$('tgGroupStatus').textContent='正在读取已加入的群组…';
+  const host=$('tgGroupList');clearElement(host);
+  try{
+    const alias=encodeURIComponent(account);
+    const [groups,monitors]=await Promise.all([
+      api('/api/telegram/accounts/'+alias+'/groups'),
+      api('/api/telegram/accounts/'+alias+'/monitors')
+    ]);
+    const selected=new Set(monitors.filter(m=>m.enabled).map(m=>m.chat_id));
+    tgVisibleGroups=groups;
+    if(!groups.length)host.append(child('p','此账号没有可用的已加入群组','muted'));
+    for(const group of groups){
+      const line=child('label',undefined,'rule');
+      line.style.display='flex';line.style.alignItems='center';line.style.gap='9px';
+      const check=document.createElement('input');check.type='checkbox';check.value=group.id;
+      check.checked=selected.has(group.id);check.style.width='auto';check.style.margin='0';
+      line.append(check,child('span',group.title+' · '+group.id));
+      host.append(line)
+    }
+    $('tgGroupStatus').textContent='可选 '+groups.length+' 个群组，已监听 '+selected.size+' 个';
+  }catch(e){$('tgGroupStatus').textContent='加载失败：'+e.message}
+}
+$('tgGroupsButton').onclick=openTgGroups;
+$('tgGroupSave').onclick=async()=>{
+  const ids=[...$('tgGroupList').querySelectorAll('input[type=checkbox]:checked')].map(n=>n.value);
+  $('tgGroupSave').disabled=true;
+  try{
+    await api('/api/telegram/accounts/'+encodeURIComponent(account)+'/monitors','PUT',{chat_ids:ids});
+    $('tgGroupsModal').hidden=true;await syncCore(true);
+    notify('已保存 '+ids.length+' 个监听群组，仅接收新消息')
+  }catch(e){$('tgGroupStatus').textContent='保存失败：'+e.message}
+  finally{$('tgGroupSave').disabled=false}
+};
+$('tgGroupClose').onclick=()=>{$('tgGroupsModal').hidden=true};
 $('pairStart').onclick=startPair;$('pairRefresh').onclick=refreshPair;$('pairClose').onclick=()=>{$('pairModal').hidden=true;syncCore(true)};
 $('reviewNav').onclick=showReviews;$('reviewClose').onclick=()=>{$('reviewModal').hidden=true};
 $('chatNav').onclick=()=>notify('当前已是聊天工作台');
@@ -331,7 +439,7 @@ async function openSettings(){
 $('settingsNav').onclick=openSettings;
 $('chatwootBtn').onclick=openSettings;
 $('settingClose').onclick=()=>{$('settingsModal').hidden=true};
-$('lockNav').onclick=()=>{adminKey='';$('loginModal').hidden=false;state.sessions=[];state.tgThreads=[];account='';activeChat=null;threadData=[];renderThreads();showEmpty()};
+$('lockNav').onclick=()=>{adminKey='';$('loginModal').hidden=false;state.sessions=[];state.tgThreads=[];state.tgAccounts=[];account='';activeChat=null;threadData=[];renderThreads();showEmpty()};
 $('routeForm').onsubmit=async e=>{
   e.preventDefault();
   const t=chosen();
@@ -342,7 +450,7 @@ $('routeForm').onsubmit=async e=>{
     $('routeForm').reset();await syncCore(true);notify('映射已创建，默认停用');
   }catch(err){notify(err.message)}
 };
-setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&$('settingsModal').hidden&&!polling)syncCore(true)},7000);
+setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&$('settingsModal').hidden&&$('tgLoginModal').hidden&&$('tgGroupsModal').hidden&&!polling)syncCore(true)},7000);
 setInterval(()=>{if(adminKey&&!$('pairModal').hidden&&$('newAlias').value.trim()&&!pairChecking)refreshPair()},2500);
 
 // Desktop installer obtains its local-only key from the protected Electron process.
