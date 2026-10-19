@@ -52,3 +52,19 @@ jobs:
             exit 1
           }
           Write-Host "Windows startup script has valid PowerShell syntax"
+
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test startup under Windows PowerShell 5.1
+        shell: pwsh
+        run: |
+          ./scripts/windows-launch-smoke.ps1
