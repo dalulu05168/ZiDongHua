@@ -1,6 +1,6 @@
 {
   "name": "xiaobawang-desktop",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "productName": "小霸王",
   "description": "XiaoBaWang local multi-account chat workspace (read-only preview)",
