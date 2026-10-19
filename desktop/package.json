@@ -37,7 +37,8 @@
         "filter": [
           "bridge.mjs",
           "chatstore.mjs",
-          "lifecycle.mjs",\n          "account-registry.mjs",
+          "lifecycle.mjs",
+          "account-registry.mjs",
           "package.json"
         ]
       },
