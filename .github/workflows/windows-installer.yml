@@ -105,7 +105,11 @@ jobs:
           $installer = @(Get-ChildItem "desktop/release" -Filter "XiaoBaWang-Setup-*.exe" | Select-Object -First 1)
           if ($installer.Count -eq 0) { throw "Installer missing" }
           $target = Join-Path $env:RUNNER_TEMP "XiaoBaWangSmoke"
-          $install = Start-Process -FilePath $installer[0].FullName -ArgumentList @("/S", "/D=$target") -Wait -PassThru
+          $install = Start-Process -FilePath $installer[0].FullName -ArgumentList @("/S", "/D=$target") -PassThru
+          if (!$install.WaitForExit(90000)) {
+            Stop-Process -Id $install.Id -Force
+            throw "Windows installer took longer than 90 seconds"
+          }
           if ($install.ExitCode -ne 0) { throw "Installer returned exit code $($install.ExitCode)" }
           $exe = Join-Path $target "小霸王.exe"
           if (!(Test-Path $exe)) {
