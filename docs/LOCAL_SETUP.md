@@ -1,6 +1,19 @@
-# 小霸王 V0.2 本机调试
+# 小霸王 V0.2+ 本机调试
 
 需 Python 3.11+；WhatsApp 连接桥额外需要 Node.js 20+。不需要 Docker。
+
+## Windows 推荐启动方式（PowerShell）
+从项目根目录执行（例如 `C:\\Users\\用户名\\Desktop\\ZiDongHua-main`）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\start-windows.ps1
+```
+
+该脚本使用 `npm.cmd` 而不是 `npm.ps1`，不会永久修改系统执行策略；自动产生三个不同的随机服务密钥，保存在本机的 `.secrets.local.json`，而不再执行 `.secrets.local.ps1`。浏览器访问 http://127.0.0.1:3100，把本机 JSON 中的 `XBW_API_KEY` 值输入管理员授权框。不要公开密钥或扫码二维码。
+
+**从旧版本升级：** 若首次启动出现 `.secrets.local.ps1` 中的 Unexpected token，说明你还在使用旧版脚本。从 GitHub 更新 `scripts/start-windows.ps1`，删除旧的 `.secrets.local.ps1` 文件（其密钥如已暴露，应作废），重新运行。新版脚本会单独生成新的 JSON 密钥。不要为了修复该问题全局放开 PowerShell 执行策略。
+
+`npm warn install-scripts` 属于安装脚本审批警告，不能据此判定 Baileys 连接成功；需要在本机实际扫码检验。
 
 ## 启动管理后台
 ```powershell
