@@ -51,6 +51,13 @@ async function connect(name) {
         current.user = sock.user?.id || null
         restartCounts.delete(name)
         current.qr = null
+        // Populate joined group names in the chat list, even before new messages arrive.
+        void sock.groupFetchAllParticipating().then(groups => {
+          if (sessions.get(name) !== current) return
+          for (const group of Object.values(groups).slice(0, 500)) {
+            current.chats.setTitle(group.id, group.subject || '')
+          }
+        }).catch(() => { /* Group refresh can be retried later via groups endpoint. */ })
       }
       if (stateUpdate.connection === 'close') {
         current.status = 'disconnected'
