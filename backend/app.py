@@ -7,6 +7,7 @@ import re
 import sqlite3
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -300,3 +301,43 @@ def chatwoot_events():
         return [dict(row) for row in db.execute(
             "SELECT delivery_key,event_type,conversation_id,message_id,received_at FROM chatwoot_events ORDER BY received_at DESC LIMIT 100"
         )]
+
+# Inbox-facing read-only APIs. Chat messages are not stored in the backend.
+@app.get("/api/chat/whatsapp/{alias}/chats", dependencies=[Depends(admin)])
+def whatsapp_chat_list(alias: str):
+    return bridge("GET", "/v1/sessions/" + _alias(alias) + "/chats")
+
+@app.get("/api/chat/whatsapp/{alias}/chats/{jid}/messages", dependencies=[Depends(admin)])
+def whatsapp_chat_messages(alias: str, jid: str):
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,90}@(g\\.us|s\\.whatsapp\\.net|lid)", jid):
+        raise HTTPException(422, "Invalid WhatsApp chat ID")
+    return bridge("GET", "/v1/sessions/" + _alias(alias) + "/chats/" + quote(jid, safe="") + "/messages")
+
+@app.get("/api/chat/telegram/threads", dependencies=[Depends(admin)])
+def telegram_chat_list():
+    with db_connection() as db:
+        return [dict(row) for row in db.execute("""
+            SELECT e.tg_account, e.tg_chat_id, e.text AS preview,
+                   e.created_at AS last_time,
+                   (SELECT COUNT(*) FROM source_events s
+                    WHERE s.tg_account=e.tg_account AND s.tg_chat_id=e.tg_chat_id) AS observed_messages
+            FROM source_events e
+            WHERE e.id = (SELECT MAX(s2.id) FROM source_events s2
+                          WHERE s2.tg_account=e.tg_account AND s2.tg_chat_id=e.tg_chat_id)
+            ORDER BY e.id DESC LIMIT 300
+        """)]
+
+@app.get("/api/chat/telegram/{alias}/{chat_id}/messages", dependencies=[Depends(admin)])
+def telegram_chat_messages(alias: str, chat_id: str):
+    _alias(alias)
+    if not re.fullmatch(CHAT, chat_id):
+        raise HTTPException(422, "Invalid Telegram chat ID")
+    with db_connection() as db:
+        rows = db.execute("""
+            SELECT id, tg_message_id, text, created_at
+            FROM source_events WHERE tg_account=? AND tg_chat_id=?
+            ORDER BY id DESC LIMIT 150
+        """, (alias, chat_id)).fetchall()
+        return {"messages": [dict(row) for row in reversed(rows)],
+                "scope": "observed_after_route_enabled",
+                "sending_enabled": False}
