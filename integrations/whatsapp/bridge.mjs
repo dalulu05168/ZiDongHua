@@ -93,4 +93,5 @@ app.get('/v1/sessions/:name/groups', async (req, res) => {
   } catch (error) { res.status(502).json({ error: error.message }) }
 })
 const host = process.env.XBW_BRIDGE_HOST || '127.0.0.1'
-app.listen(3101, host, () => console.log('WhatsApp bridge on', host, 3101))
+const port = Number(process.env.XBW_BRIDGE_PORT || 3101)
+app.listen(port, host, () => console.log('WhatsApp bridge on', host, port))
