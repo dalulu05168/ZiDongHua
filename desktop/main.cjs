@@ -179,10 +179,26 @@ function createWindow() {
       const layout=await window.webContents.executeJavaScript(
         'Boolean(document.getElementById("threadList") && document.getElementById("messages"))'
       );
-      log('desktop-ui', 'Rendered page: '+title+', chat layout: '+layout+'\n');
       if(!layout) throw new Error('桌面窗口未载入新版聊天界面');
+      // The desktop preview must log into its own local backend automatically;
+      // an API-key entry screen is not an acceptable installed-app experience.
+      let authorized=false;
+      for(let i=0;i<24;i++){
+        authorized=await window.webContents.executeJavaScript(
+          'Boolean(document.getElementById("loginModal")?.hidden)'
+        );
+        if(authorized) break;
+        await sleep(250);
+      }
+      if(!authorized) throw new Error('桌面版未完成自动本地授权，仍显示密钥登录框');
+      const noOuterScroll=await window.webContents.executeJavaScript(
+        'document.documentElement.scrollHeight <= window.innerHeight + 2'
+      );
+      log('desktop-ui', 'Rendered chat page: '+title+', auto authorization: '+authorized+
+        ', outer scrolling: '+(!noOuterScroll)+'\n');
+      if(!noOuterScroll) throw new Error('聊天主页面发生整体滚动，未满足固定窗口布局');
       fs.writeFileSync(path.join(logsDir,'ui-ready.json'),
-        JSON.stringify({title,chat_layout:true,port:API_PORT}),
+        JSON.stringify({title,chat_layout:true,auto_authorized:true,no_outer_scroll:true,port:API_PORT}),
         {encoding:'utf8',mode:0o600});
     }catch(err){log('desktop-ui-error',errorMessage(err));}
   });
