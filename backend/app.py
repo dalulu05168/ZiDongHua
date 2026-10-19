@@ -175,7 +175,7 @@ class TelegramLoginStart(BaseModel):
     alias: str = Field(pattern=ACCOUNT)
     api_id: int = Field(gt=0)
     api_hash: str = Field(min_length=16, max_length=100)
-    phone: str = Field(pattern=r"^\\+[0-9]{6,16}$")
+    phone: str = Field(pattern=r"^\+[0-9]{6,16}$")
 
 class TelegramLoginVerify(BaseModel):
     code: str = Field(default="", max_length=16)
