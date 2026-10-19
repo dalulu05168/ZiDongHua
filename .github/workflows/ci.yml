@@ -29,7 +29,7 @@ jobs:
       - name: Management API tests
         run: |
           python -m pip install -r backend/requirements.txt
-          python -m pytest -v backend/test_app.py backend/test_chatwoot.py backend/test_chat_workspace.py
+          python -m pytest -v backend/test_app.py backend/test_chatwoot.py backend/test_chat_workspace.py backend/test_telegram_desktop.py
       - name: Telegram adapter syntax
         run: python -m py_compile integrations/telegram/worker.py
       - name: WhatsApp adapter syntax
