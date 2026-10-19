@@ -76,7 +76,12 @@ async function connect(name) {
           current.retries += 1
           restartCounts.set(name, current.retries)
           // Reuse saved credentials; never copy QR/auth data into source control.
-          setImmediate(() => connect(name).catch(err => console.error('Restart failed', name, err.message)))
+          // Back off between retries instead of immediately hammering WhatsApp.
+          const delayMs = Math.min(30000, 1000 * (2 ** (current.retries - 1)))
+          setTimeout(() => {
+            if (!accountRegistry.isActive(name) || sessions.has(name)) return
+            connect(name).catch(err => console.error('Restart failed', name, err.message))
+          }, delayMs).unref()
         } else {
           restartCounts.delete(name)
           console.log('Closed session', name,
