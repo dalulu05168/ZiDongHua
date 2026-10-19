@@ -5,6 +5,7 @@ import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeys
 import pino from 'pino'
 import path from 'node:path'
 import { decision, safeAlias, activeCapacity } from './lifecycle.mjs'
+import { createChatStore, validChatJid } from './chatstore.mjs'
 
 const app = express()
 app.use(express.json({ limit: '32kb' }))
@@ -25,7 +26,7 @@ async function connect(name) {
   if (!activeCapacity(sessions.size, maxActive)) throw new Error('Active session cap reached')
   const authDir = path.resolve(process.env.WA_AUTH_DIR || './auth')
   const { state, saveCreds } = await useMultiFileAuthState(path.join(authDir, name))
-  const current = { status: 'connecting', qr: null, user: null, sock: null, retries: restartCounts.get(name) || 0, stopped: false }
+  const current = { status: 'connecting', qr: null, user: null, sock: null, chats: createChatStore(), retries: restartCounts.get(name) || 0, stopped: false }
   sessions.set(name, current)
   try {
     const sock = makeWASocket({
@@ -33,6 +34,15 @@ async function connect(name) {
     })
     current.sock = sock
     sock.ev.on('creds.update', saveCreds)
+    sock.ev.on('messages.upsert', ({ messages = [] }) => {
+      for (const message of messages) current.chats.seeMessage(message)
+    })
+    sock.ev.on('chats.upsert', chatList => {
+      for (const chat of chatList || []) current.chats.setTitle(chat.id, chat.name || chat.subject || '')
+    })
+    sock.ev.on('chats.update', chatList => {
+      for (const chat of chatList || []) if (chat.name || chat.subject) current.chats.setTitle(chat.id, chat.name || chat.subject)
+    })
     sock.ev.on('connection.update', stateUpdate => {
       if (sessions.get(name) !== current) return
       if (stateUpdate.qr) { current.qr = stateUpdate.qr; current.status = 'qr_ready' }
@@ -92,6 +102,19 @@ app.get('/v1/sessions/:name/groups', async (req, res) => {
     res.json(Object.values(groups).map(g => ({ id: g.id, subject: g.subject })))
   } catch (error) { res.status(502).json({ error: error.message }) }
 })
+// Read-only, current-process chat projection. Historical sync and outbound messaging are disabled.
+app.get('/v1/sessions/:name/chats', (req, res) => {
+  const s = sessions.get(req.params.name)
+  if (!s || s.status !== 'connected') return res.status(409).json({ error: 'Not connected' })
+  res.json({ chats: s.chats.list(), scope: 'observed_since_connection', sending_enabled: false })
+})
+app.get('/v1/sessions/:name/chats/:jid/messages', (req, res) => {
+  const s = sessions.get(req.params.name)
+  if (!s || s.status !== 'connected') return res.status(409).json({ error: 'Not connected' })
+  if (!validChatJid(req.params.jid)) return res.status(400).json({ error: 'Invalid chat id' })
+  res.json({ jid: req.params.jid, messages: s.chats.messages(req.params.jid), scope: 'observed_since_connection', sending_enabled: false })
+})
+
 const host = process.env.XBW_BRIDGE_HOST || '127.0.0.1'
 const port = Number(process.env.XBW_BRIDGE_PORT || 3101)
 app.listen(port, host, () => console.log('WhatsApp bridge on', host, port))
