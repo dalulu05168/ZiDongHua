@@ -1,0 +1,56 @@
+{
+  "name": "xiaobawang-desktop",
+  "version": "0.5.0",
+  "private": true,
+  "productName": "小霸王",
+  "description": "XiaoBaWang local multi-account chat workspace (read-only preview)",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.xiaobawang.desktop",
+    "productName": "小霸王",
+    "copyright": "Copyright XiaoBaWang",
+    "directories": {"output": "release"},
+    "files": ["main.cjs", "preload.cjs", "package.json"],
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "../dist/xiaobawang-backend.exe",
+        "to": "bin/xiaobawang-backend.exe"
+      },
+      {
+        "from": "../integrations/whatsapp",
+        "to": "bridge",
+        "filter": [
+          "bridge.mjs",
+          "chatstore.mjs",
+          "lifecycle.mjs",
+          "package.json",
+          "node_modules/**/*",
+          "!**/auth/**",
+          "!**/.env",
+          "!**/*.session",
+          "!**/*.log"
+        ]
+      }
+    ],
+    "win": {
+      "target": [{"target": "nsis", "arch": ["x64"]}],
+      "artifactName": "XiaoBaWang-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
