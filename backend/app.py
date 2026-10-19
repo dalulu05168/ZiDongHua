@@ -313,7 +313,7 @@ def whatsapp_chat_list(alias: str):
 
 @app.get("/api/chat/whatsapp/{alias}/chats/{jid}/messages", dependencies=[Depends(admin)])
 def whatsapp_chat_messages(alias: str, jid: str):
-    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,90}@(g\\.us|s\\.whatsapp\\.net|lid)", jid):
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,90}@(g\.us|s\.whatsapp\.net|lid)", jid):
         raise HTTPException(422, "Invalid WhatsApp chat ID")
     return bridge("GET", "/v1/sessions/" + _alias(alias) + "/chats/" + quote(jid, safe="") + "/messages")
 
