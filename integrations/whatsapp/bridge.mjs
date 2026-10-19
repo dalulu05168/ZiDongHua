@@ -11,6 +11,7 @@ app.use(express.json({ limit: '32kb' }))
 const authKey = process.env.XBW_BRIDGE_KEY || ''
 const maxActive = Math.max(1, Math.min(7, Number(process.env.MAX_ACTIVE_SESSIONS || 7)))
 const sessions = new Map()
+const restartCounts = new Map()
 const valid = safeAlias
 
 app.use((req, res, next) => {
@@ -24,7 +25,7 @@ async function connect(name) {
   if (!activeCapacity(sessions.size, maxActive)) throw new Error('Active session cap reached')
   const authDir = path.resolve(process.env.WA_AUTH_DIR || './auth')
   const { state, saveCreds } = await useMultiFileAuthState(path.join(authDir, name))
-  const current = { status: 'connecting', qr: null, user: null, sock: null, retries: 0, stopped: false }
+  const current = { status: 'connecting', qr: null, user: null, sock: null, retries: restartCounts.get(name) || 0, stopped: false }
   sessions.set(name, current)
   try {
     const sock = makeWASocket({
@@ -38,6 +39,7 @@ async function connect(name) {
       if (stateUpdate.connection === 'open') {
         current.status = 'connected'
         current.user = sock.user?.id || null
+        restartCounts.delete(name)
         current.qr = null
       }
       if (stateUpdate.connection === 'close') {
@@ -49,10 +51,14 @@ async function connect(name) {
         sessions.delete(name)
         if (action === 'restart') {
           current.retries += 1
+          restartCounts.set(name, current.retries)
           // Reuse saved credentials; never copy QR/auth data into source control.
           setImmediate(() => connect(name).catch(err => console.error('Restart failed', name, err.message)))
-        } else console.log('Closed session', name,
+        } else {
+          restartCounts.delete(name)
+          console.log('Closed session', name,
           reason === DisconnectReason.loggedOut ? 'logged-out' : 'manual-reconnect-required')
+        }
       }
     })
     return current
