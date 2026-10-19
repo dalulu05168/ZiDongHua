@@ -157,6 +157,8 @@ jobs:
                    $page.Content -match 'id="threadList"' -and
                    $page.Content -notmatch "V0.2 · 仅模拟" -and
                    $ui.chat_layout -eq $true -and
+                   $ui.auto_authorized -eq $true -and
+                   $ui.no_outer_scroll -eq $true -and
                    $ui.title -match "多账号聊天工作台") {
                   $healthy=$true; break
                 }
