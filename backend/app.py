@@ -71,7 +71,7 @@ async def lifespan(_app):
     init_db()
     yield
 
-app = FastAPI(title="小霸王 XiaoBaWang", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="小霸王 XiaoBaWang", version="0.4.0", lifespan=lifespan)
 
 def _check(value, setting):
     expected = os.getenv(setting, "")
@@ -118,7 +118,7 @@ def advanced_settings():
 
 @app.get("/health")
 def health():
-    return {"product": "XiaoBaWang", "version": "0.2.0",
+    return {"product": "XiaoBaWang", "version": "0.4.0",
             "mode": "simulation_only", "real_sending": False}
 
 @app.get("/api/config", dependencies=[Depends(admin)])
