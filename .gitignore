@@ -11,3 +11,5 @@ node_modules/
 .secrets.local.ps1
 data/
 .secrets.local.json
+
+.logs/
