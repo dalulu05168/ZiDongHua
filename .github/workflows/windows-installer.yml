@@ -97,6 +97,12 @@ jobs:
           $files = @(Get-ChildItem "release" -Filter "XiaoBaWang-Setup-*.exe")
           if ($files.Count -lt 1) { throw "Windows installer was not generated" }
           $files | ForEach-Object { Write-Host ("Installer: " + $_.Name + " (" + $_.Length + " bytes)") }
+          $bridge = "release/win-unpacked/resources/bridge"
+          foreach ($dep in @("express","@whiskeysockets/baileys","pino")) {
+            $packageJson = Join-Path $bridge ("node_modules/" + $dep + "/package.json")
+            if (!(Test-Path $packageJson)) { throw "Bundled WhatsApp dependency missing: $dep" }
+          }
+          if (!(Test-Path (Join-Path $bridge "bridge.mjs"))) { throw "Bridge script missing" }
 
       - name: Install and launch packaged desktop app (Windows smoke test)
         shell: pwsh
