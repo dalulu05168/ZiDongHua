@@ -4,13 +4,14 @@ import express from 'express'
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import path from 'node:path'
+import { decision, safeAlias, activeCapacity } from './lifecycle.mjs'
 
 const app = express()
 app.use(express.json({ limit: '32kb' }))
 const authKey = process.env.XBW_BRIDGE_KEY || ''
 const maxActive = Math.max(1, Math.min(7, Number(process.env.MAX_ACTIVE_SESSIONS || 7)))
 const sessions = new Map()
-const valid = s => typeof s === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(s)
+const valid = safeAlias
 
 app.use((req, res, next) => {
   if (!authKey || req.get('X-Bridge-Key') !== authKey) return res.status(401).json({ error: 'Unauthorized' })
@@ -20,10 +21,10 @@ app.use((req, res, next) => {
 async function connect(name) {
   if (!valid(name)) throw new Error('Invalid alias')
   if (sessions.has(name)) return sessions.get(name)
-  if (sessions.size >= maxActive) throw new Error('Active session cap reached')
+  if (!activeCapacity(sessions.size, maxActive)) throw new Error('Active session cap reached')
   const authDir = path.resolve(process.env.WA_AUTH_DIR || './auth')
   const { state, saveCreds } = await useMultiFileAuthState(path.join(authDir, name))
-  const current = { status: 'connecting', qr: null, user: null, sock: null }
+  const current = { status: 'connecting', qr: null, user: null, sock: null, retries: 0, stopped: false }
   sessions.set(name, current)
   try {
     const sock = makeWASocket({
@@ -42,11 +43,16 @@ async function connect(name) {
       if (stateUpdate.connection === 'close') {
         current.status = 'disconnected'
         current.qr = null
-        sessions.delete(name)
         const reason = stateUpdate.lastDisconnect?.error?.output?.statusCode
-        console.log('Closed session', name,
-          reason === DisconnectReason.loggedOut ? 'logged-out' : 'reconnect-required')
-        // Reconnection is manual; avoids uncontrolled loops and QR churn.
+        const action = decision({ reason, restartRequired: DisconnectReason.restartRequired,
+          wasStopped: current.stopped, retries: current.retries })
+        sessions.delete(name)
+        if (action === 'restart') {
+          current.retries += 1
+          // Reuse saved credentials; never copy QR/auth data into source control.
+          setImmediate(() => connect(name).catch(err => console.error('Restart failed', name, err.message)))
+        } else console.log('Closed session', name,
+          reason === DisconnectReason.loggedOut ? 'logged-out' : 'manual-reconnect-required')
       }
     })
     return current
