@@ -22,7 +22,7 @@ th{color:#60758b}.scroll{overflow:auto}#notice{white-space:pre-wrap;color:#31557
 </div>
 <section><h2>群组路由规则</h2><div class="scroll" id="rules">尚未加载</div></section>
 <section><h2>消息审核与模拟操作</h2><small>审核操作只更新数据库，不向 WhatsApp 发送内容。</small><div class="scroll" id="deliveries">尚未加载</div></section>
-<section><h2>Chatwoot 工作台</h2><p>Chatwoot 的客服收件箱、联系人和自动回复尚未集成。本页面不会将其描述为已完成。</p></section>
+<section><h2>Chatwoot 客服数据（只读）</h2><p>支持查询收件箱、联系人和会话摘要。需要先在本机配置 Chatwoot API；客服分配和自动回复尚未接通。</p><div class="controls"><button class="secondary" id="cwInboxes">查看收件箱</button><button class="secondary" id="cwContacts">查看联系人</button><button class="secondary" id="cwConversations">查看会话</button><button class="secondary" id="cwEvents">查看事件日志</button></div><pre id="cwOutput" style="max-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere">尚未连接</pre></section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -58,4 +58,9 @@ $('waState').onclick=async()=>{try{
  $('qr').hidden=!state.qr_data_uri;if(state.qr_data_uri)$('qr').src=state.qr_data_uri;
  if(state.status==='connected'){const groups=await api('/api/whatsapp/sessions/'+alias+'/groups');$('groups').textContent='可访问群组：'+groups.map(g=>g.subject+' ('+g.id+')').join('，')}
  }catch(e){show(e.message)}};
+async function cw(resource){try{const response=await api(resource==='events'?'/api/chatwoot-events':'/api/chatwoot/'+resource);const summary=JSON.stringify(response,null,2);$('cwOutput').textContent=summary.slice(0,6000)}catch(e){$('cwOutput').textContent='查询失败：'+e.message}}
+$('cwInboxes').onclick=()=>cw('inboxes');
+$('cwContacts').onclick=()=>cw('contacts');
+$('cwConversations').onclick=()=>cw('conversations');
+$('cwEvents').onclick=()=>cw('events');
 </script></body></html>
