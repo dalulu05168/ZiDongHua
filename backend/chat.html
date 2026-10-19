@@ -210,7 +210,7 @@ async function loadThreads(preserve=false){
       return {id:g.chat_id,title:g.title||('Telegram 群 '+g.chat_id),preview:seen?.preview||'等待该群的新消息',count:seen?.observed_messages||0,time:seen?.last_time||'',kind:'tg'}
     });
     const activeIds=new Set(threadData.map(x=>x.id));
-    for(const t of observed){if(!activeIds.has(t.tg_chat_id))threadData.push({
+    for(const t of observed){if(!activeIds.has(t.tg_chat_id)&&routes.some(r=>r.enabled&&r.tg_account===account&&r.tg_chat_id===t.tg_chat_id))threadData.push({
       id:t.tg_chat_id,title:'Telegram 群 '+t.tg_chat_id,preview:t.preview,
       count:t.observed_messages,time:t.last_time,kind:'tg'
     })}
