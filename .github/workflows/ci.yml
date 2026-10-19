@@ -14,3 +14,7 @@ jobs:
           grep -qx 'BAILEYS_SEND_ENABLED=false' .env.example
           test -f README.md
           test -f docs/ROADMAP.md
+      - name: Router unit tests
+        run: |
+          cd router
+          python -m unittest -v test_engine.py
