@@ -36,3 +36,8 @@ jobs:
         run: |
           node --check integrations/whatsapp/bridge.mjs
           node --test integrations/whatsapp/lifecycle.test.mjs
+      - name: Install Node bridge dependencies
+        working-directory: integrations/whatsapp
+        run: npm install --no-audit --no-fund
+      - name: Real local HTTP integration smoke test (no external logins)
+        run: python scripts/smoke_test.py
