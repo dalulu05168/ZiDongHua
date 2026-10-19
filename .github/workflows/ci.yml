@@ -33,4 +33,6 @@ jobs:
       - name: Telegram adapter syntax
         run: python -m py_compile integrations/telegram/worker.py
       - name: WhatsApp adapter syntax
-        run: node --check integrations/whatsapp/bridge.mjs
+        run: |
+          node --check integrations/whatsapp/bridge.mjs
+          node --test integrations/whatsapp/lifecycle.test.mjs
