@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小霸王 · 多账号聊天工作台</title>
+<style>
+:root{font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif;color:#1d3148;background:#f1f5f9}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit}
+button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}
+.workspace{display:grid;grid-template-columns:64px 330px minmax(340px,1fr) 305px;height:100vh;min-height:620px;overflow:hidden}
+.rail{background:#112d4a;color:#d4e5f2;display:flex;flex-direction:column;align-items:center;padding:16px 8px;gap:16px}
+.brand{width:44px;height:44px;border-radius:13px;background:#2375b8;color:white;font-size:19px;font-weight:800;display:grid;place-items:center}
+.railbutton{border:0;background:transparent;color:#c6d9ea;width:44px;height:44px;border-radius:12px;font-size:21px}
+.railbutton.active,.railbutton:hover{background:#285276;color:white}
+.bottom{margin-top:auto}
+.sidebar{display:flex;flex-direction:column;min-width:0;background:#fff;border-right:1px solid #e0e7ef}
+.sidehead{padding:23px 20px 14px}
+.topline{display:flex;align-items:center;justify-content:space-between}
+h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
+.sidehead .hint{font-size:12px;color:#8193a6;margin-top:5px}
+.iconbtn{border:0;background:#edf3f8;color:#34536f;padding:8px 11px;border-radius:9px}
+.segment{display:flex;background:#eef3f8;padding:4px;border-radius:11px;margin:18px 0 12px}
+.segment button{flex:1;border:0;border-radius:8px;background:transparent;padding:9px;color:#5c7188}
+.segment button.on{background:white;box-shadow:0 1px 4px #bfcbda80;color:#174f80;font-weight:700}
+.accountline{display:flex;gap:8px;align-items:center}select,input{border:1px solid #d7e1eb;background:#fff;color:#20374f;border-radius:9px;padding:10px;min-width:0}
+.accountline select{flex:1}.search{width:100%;margin-top:11px}
+.statusline{padding:9px 20px;background:#f7fafc;border-top:1px solid #edf2f6;border-bottom:1px solid #edf2f6;color:#60788f;font-size:12px;min-height:35px}
+.threadlist{overflow-y:auto;flex:1}.thread{border:0;width:100%;padding:13px 17px;background:transparent;text-align:left;display:flex;gap:12px;border-bottom:1px solid #f1f4f7}
+.thread:hover{background:#f6f9fc}.thread.active{background:#e7f2fb}.avatar{width:42px;height:42px;flex:none;border-radius:50%;display:grid;place-items:center;background:#e6eef6;color:#25577f;font-weight:700}
+.threadmain{min-width:0;flex:1}.threadtop{display:flex;align-items:center;justify-content:space-between;gap:7px}
+.threadname{font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.threadsmall{color:#8a9aaa;font-size:11px;flex:none}.preview{color:#7e90a3;font-size:12px;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.emptylist{padding:26px 21px;color:#798b9f;font-size:13px;line-height:1.8}
+.chat{display:flex;flex-direction:column;min-width:0;background:#f6f8fb}
+.chathead{height:81px;background:#fff;border-bottom:1px solid #dfe6ef;display:flex;align-items:center;padding:0 24px;gap:13px}
+.chattitle{font-weight:700;font-size:15px}.chatsub{font-size:12px;color:#8294a6;margin-top:5px}
+.chatspacer{flex:1}.chip{font-size:11px;padding:7px 9px;border-radius:20px;background:#fff6e5;color:#a16718;border:1px solid #f0dfbd}
+.messages{overflow-y:auto;flex:1;padding:24px 29px;display:flex;flex-direction:column;gap:13px}
+.nochat{margin:auto;max-width:330px;text-align:center;color:#758ba1;line-height:1.75}
+.nochat .illustration{font-size:42px;margin-bottom:11px}
+.bubble{max-width:min(75%,610px);align-self:flex-start;background:#fff;padding:11px 14px;border:1px solid #e7edf4;border-radius:13px 13px 13px 3px;box-shadow:0 1px 2px #1e36580d;overflow-wrap:anywhere}
+.bubble.mine{align-self:flex-end;background:#e0f1e7;border-color:#cfecd8;border-radius:13px 13px 3px 13px}
+.sender{font-size:11px;font-weight:700;color:#337c99;margin-bottom:6px}.bodytext{font-size:14px;white-space:pre-wrap;line-height:1.6}.msgtime{text-align:right;font-size:10px;color:#93a2b2;margin-top:6px}
+.compose{display:flex;align-items:center;gap:12px;padding:18px 23px;border-top:1px solid #e1e9f0;background:#fff;color:#7d8d9d}
+.compose input{flex:1;background:#f2f5f8}.compose .send{border:0;padding:11px 17px;border-radius:10px;background:#2c618d;color:white}
+.details{background:white;border-left:1px solid #e1e8ef;overflow-y:auto;padding:24px 18px}
+.details h2{font-size:15px;margin:0 0 13px}.details h3{font-size:13px;margin:25px 0 10px}
+.details .muted{font-size:12px;color:#7c8fa0;line-height:1.65}.detailbox{border:1px solid #e4ebf2;border-radius:12px;padding:13px;margin-top:14px;background:#fafcff}
+.fieldlabel{font-size:11px;color:#7f90a2;margin:9px 0 5px}.detailval{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.details input,.details button{width:100%;margin-bottom:9px}
+.primary{border:0;border-radius:9px;background:#1c5383;color:white;padding:11px}
+.secondary{border:1px solid #d5e0ed;border-radius:9px;background:white;color:#2b5981;padding:10px}
+.rule{font-size:12px;border:1px solid #e1e8f0;border-radius:10px;padding:10px;margin:9px 0;overflow-wrap:anywhere}
+.rule button{margin-top:8px}
+.banner{color:#ae6726;background:#fff4e2;border:1px solid #f2dfbf;border-radius:10px;padding:10px;font-size:12px;line-height:1.5}
+.notice{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:8;background:#153855;color:white;border-radius:10px;padding:11px 16px;font-size:12px;max-width:85vw;box-shadow:0 8px 24px #12345930}
+.modalbg{position:fixed;inset:0;background:#122e49b3;display:grid;place-items:center;z-index:10;padding:20px}
+.modal{background:white;max-width:490px;width:100%;border-radius:18px;padding:27px;box-shadow:0 20px 60px #0d274b48;max-height:85vh;overflow:auto}
+.modal h2{margin:0 0 11px;font-size:21px}.modal p{font-size:13px;color:#70869a;line-height:1.6}
+.modal input{width:100%;margin:8px 0}.modal button{margin-top:9px}
+.modal img{width:min(260px,100%);margin:14px auto;display:block}
+[hidden]{display:none!important}
+@media(max-width:1180px){.workspace{grid-template-columns:56px 300px minmax(350px,1fr)}.details{display:none}}
+@media(max-width:750px){.workspace{grid-template-columns:51px minmax(215px,38%) 1fr}.sidehead{padding:14px}.chathead{padding:0 12px}.messages{padding:14px}.compose{padding:10px}}
+@media(max-width:570px){.workspace{grid-template-columns:50px 1fr}.chat{display:none}.details{display:none}}
+</style>
+</head>
+<body>
+<div class="workspace">
+<nav class="rail" aria-label="主导航">
+<div class="brand" title="小霸王">霸</div>
+<button class="railbutton active" id="chatNav" title="聊天">▤</button>
+<button class="railbutton" id="routeNav" title="群组路由">⇄</button>
+<button class="railbutton" id="reviewNav" title="审核队列">☷</button>
+<button class="railbutton" id="settingsNav" title="高级设置">⚙</button>
+<button class="railbutton bottom" id="lockNav" title="重新授权">♙</button>
+</nav>
+<aside class="sidebar">
+<div class="sidehead">
+<div class="topline"><div><h1>聊天</h1><div class="hint">小霸王 · 多账号工作台</div></div><button class="iconbtn" id="refresh" title="同步消息">↻</button></div>
+<div class="segment"><button id="waTab" class="on">WhatsApp</button><button id="tgTab">Telegram</button></div>
+<div class="accountline"><select id="accountSelect" aria-label="选择账号"><option value="">尚无连接账号</option></select><button class="iconbtn" id="addAccount" title="添加 WhatsApp 账号">＋</button></div>
+<input class="search" id="search" placeholder="搜索联系人或群组" aria-label="搜索会话">
+</div>
+<div class="statusline" id="sideStatus">等待授权…</div>
+<div class="threadlist" id="threadList"><div class="emptylist">连接账号后，这里显示真实会话。不会填入虚构联系人。</div></div>
+</aside>
+<main class="chat">
+<header class="chathead">
+<div class="avatar" id="chatAvatar">—</div>
+<div><div class="chattitle" id="chatTitle">选择一个聊天</div><div class="chatsub" id="chatSubtitle">查看来自已授权账号的消息</div></div>
+<div class="chatspacer"></div><span class="chip">只读 · 真实发送未启用</span>
+</header>
+<section class="messages" id="messages"><div class="nochat"><div class="illustration">▦</div><strong>欢迎使用小霸王聊天工作台</strong><p>请在左侧选择账号和聊天。WhatsApp 只能读取连接后观察到的消息，Telegram 只显示已被监听记录的消息。</p></div></section>
+<footer class="compose"><span title="附件尚未接入">＋</span><input type="text" placeholder="真实消息发送尚未启用，当前为只读模式" disabled aria-label="消息输入框，暂不可用"><button class="send" disabled>发送</button></footer>
+</main>
+<aside class="details" id="details">
+<h2>会话资料与群组路由</h2>
+<p class="muted">这里集中显示会话信息、Telegram 来源对应关系和安全审核，不占用主聊天窗口。</p>
+<div class="detailbox"><div class="fieldlabel">当前渠道</div><div class="detailval" id="detailChannel">未选择</div><div class="fieldlabel">账号</div><div class="detailval" id="detailAccount">—</div><div class="fieldlabel">会话 / 群组 ID</div><div class="detailval" id="detailJid">—</div></div>
+<h3>Telegram → WhatsApp 群组映射</h3>
+<div class="banner">默认关闭。启用规则只会收集消息进入审核队列，不会自动向 WhatsApp 发送。</div>
+<div id="ruleList" class="muted" style="margin-top:14px">尚未设置映射</div>
+<form id="routeForm" style="margin-top:13px">
+<div class="fieldlabel">Telegram 来源账号</div><input name="tg_account" required placeholder="tg_01" aria-label="Telegram 来源账号">
+<div class="fieldlabel">Telegram 来源群 ID</div><input name="tg_chat_id" required placeholder="-100123456" aria-label="Telegram 群组 ID">
+<button class="primary" type="submit">映射到当前 WhatsApp 群组</button>
+</form>
+<h3>客服工作台</h3><button class="secondary" id="chatwootBtn">Chatwoot / 详细设置</button>
+<p class="muted">Chatwoot 当前仅有只读接口，客服分配与自动回复尚未联调。</p>
+</aside>
+</div>
+<div class="modalbg" id="loginModal">
+<div class="modal"><h2>小霸王 · 本地管理授权</h2>
+<p>请输入你本机 <code>.secrets.local.json</code> 文件里的 XBW_API_KEY。密钥只在当前网页内存使用，不会持久保存在浏览器，也不要发送给别人。</p>
+<input type="password" id="adminKey" placeholder="XBW_API_KEY" autocomplete="off">
+<button class="primary" id="loginBtn">进入聊天工作台</button>
+<p id="loginError" role="status"></p>
+</div></div>
+<div class="modalbg" id="pairModal" hidden>
+<div class="modal">
+<h2>连接 WhatsApp 账号</h2>
+<p>输入账号别名，生成二维码后用该账号的 WhatsApp「已关联设备」扫码。请勿分享登录二维码。</p>
+<input id="newAlias" placeholder="wa_01" aria-label="新增 WhatsApp 账号别名">
+<button class="primary" id="pairStart">开始连接</button>
+<div class="muted" id="pairStatus">未发起连接</div><img id="pairQr" alt="WhatsApp 扫码二维码" hidden>
+<button class="secondary" id="pairRefresh">刷新扫码状态</button><button class="secondary" id="pairClose">关闭</button>
+</div></div>
+<div class="modalbg" id="reviewModal" hidden>
+<div class="modal"><h2>待审核消息</h2><p>这里只能模拟通过或拒绝，绝不会实际群发。</p><div id="reviewList"></div><button class="secondary" id="reviewClose">关闭</button></div></div>
+<div class="notice" id="notice" hidden></div>
+<script>
+const $=id=>document.getElementById(id);
+let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false;
+const state={sessions:[], tgThreads:[], bridgeOnline:false};
+function notify(text){const n=$('notice');n.textContent=String(text);n.hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.hidden=true,4300)}
+async function api(path,method='GET',data) {
+  if(!adminKey)throw Error('请先管理授权');
+  const response=await fetch(path,{method,headers:{'X-API-Key':adminKey,'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined,cache:'no-store'});
+  if(!response.ok){const detail=await response.text();throw Error('接口 '+response.status+'：'+detail.slice(0,180))}
+  return response.json();
+}
+function clearElement(node){node.replaceChildren()}
+function child(tag,txt,cls){const el=document.createElement(tag);if(txt!==undefined)el.textContent=String(txt);if(cls)el.className=cls;return el}
+function chosen(){return threadData.find(t=>t.id===activeChat)}
+function showSide(msg){$('sideStatus').textContent=msg}
+function setChannel(next){channel=next;activeChat=null;$('waTab').classList.toggle('on',next==='wa');$('tgTab').classList.toggle('on',next==='tg');$('addAccount').hidden=next!=='wa';renderAccounts();loadThreads()}
+function renderAccounts(){
+  const select=$('accountSelect');clearElement(select);
+  const options=channel==='wa'?state.sessions.map(s=>({id:s.name,label:s.name+' · '+s.status})): [...new Set(state.tgThreads.map(t=>t.tg_account))].map(t=>({id:t,label:t}));
+  if(!options.length){select.append(child('option',channel==='wa'?'尚无已启动账号':'没有已监听的 TG 群'));select.value='';account='';return}
+  options.forEach(o=>{const opt=child('option',o.label);opt.value=o.id;select.append(opt)});
+  if(!options.some(o=>o.id===account))account=options[0].id;
+  select.value=account;
+}
+function normalTime(raw,isTelegram=false){
+  if(!raw)return '';
+  const d=isTelegram?new Date(raw.replace(' ','T')+'Z'):new Date(Number(raw)*1000);
+  return isNaN(d.getTime())?'':d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+}
+async function syncCore(silent=false){
+  if(!adminKey||polling)return;
+  polling=true;
+  try{
+    const [tg,rulesResponse]=await Promise.all([api('/api/chat/telegram/threads'),api('/api/routes')]);
+    state.tgThreads=tg;routes=rulesResponse;
+    try{state.sessions=await api('/api/whatsapp/sessions');state.bridgeOnline=true}
+    catch(e){state.sessions=[];state.bridgeOnline=false;if(!silent)notify('WhatsApp 桥接尚未连接，请先检查本机服务')}
+    renderAccounts();
+    await loadThreads(true);
+    if(!silent)notify('已同步最新可用的会话');
+  }catch(e){if(!silent)notify(e.message);showSide('后台接口暂时不可用')}
+  finally{polling=false}
+}
+async function loadThreads(preserve=false){
+  const old=activeChat;
+  threadData=[];
+  if(channel==='tg'){
+    threadData=state.tgThreads.filter(t=>t.tg_account===account).map(t=>({
+      id:t.tg_chat_id,title:'Telegram 群 '+t.tg_chat_id,preview:t.preview,
+      count:t.observed_messages,time:t.last_time,kind:'tg'
+    }));
+    showSide(threadData.length+' 个已监听群组 · 仅已入库的消息');
+  } else if(account&&state.bridgeOnline){
+    const online=state.sessions.find(s=>s.name===account);
+    if(online?.status==='connected'){
+      try{
+        const result=await api('/api/chat/whatsapp/'+encodeURIComponent(account)+'/chats');
+        threadData=result.chats.map(t=>({
+          id:t.jid,title:t.title,preview:t.preview,count:t.observedMessages,
+          time:t.lastTime,kind:t.kind
+        }));
+        showSide(threadData.length+' 个会话 · 仅连接后观察到的消息');
+      }catch(e){showSide('聊天读取失败：'+e.message)}
+    } else showSide('账号未连接 · 请扫码授权');
+  } else showSide(state.bridgeOnline?'点击＋开始连接 WhatsApp 账号':'WhatsApp 桥接未连通 · 请检查 3101 端口');
+  if(!preserve)activeChat=null;
+  else activeChat=threadData.some(t=>t.id===old)?old:null;
+  renderThreads();
+  if(activeChat)await loadMessages();else showEmpty();
+  renderDetail();
+}
+function renderThreads(){
+  const host=$('threadList');clearElement(host);
+  const keyword=$('search').value.trim().toLowerCase();
+  const list=threadData.filter(t=>[t.title,t.id,t.preview].some(v=>String(v||'').toLowerCase().includes(keyword)));
+  if(!list.length){host.append(child('div',account?'暂无匹配会话。WhatsApp 只能显示连接后已观察到的消息。':'尚无连接账号，点击右上角＋添加账号。','emptylist'));return}
+  for(const t of list){
+    const b=child('button',undefined,'thread'+(t.id===activeChat?' active':''));b.type='button';
+    b.append(child('div',t.kind==='group'||t.kind==='tg'?'群':t.title.slice(0,1),'avatar'));
+    const body=child('div',undefined,'threadmain'),top=child('div',undefined,'threadtop');
+    top.append(child('span',t.title,'threadname'),child('span',channel==='wa'?normalTime(t.time):String(t.time||'').slice(11,16),'threadsmall'));
+    body.append(top,child('div',t.preview||'暂无消息','preview'));b.append(body);
+    b.onclick=()=>{activeChat=t.id;renderThreads();renderDetail();loadMessages()};
+    host.append(b);
+  }
+}
+function showEmpty(){
+  $('chatTitle').textContent='选择一个聊天';$('chatSubtitle').textContent='查看来自已授权账号的消息';$('chatAvatar').textContent='—';
+  $('messages').replaceChildren();
+  const hint=child('div',undefined,'nochat');hint.append(child('div','▦','illustration'),child('strong','小霸王 · 统一聊天工作台'),child('p','从左侧选择会话。WhatsApp 不自动拉取全部历史记录，Telegram 显示已授权监听后保存的消息。'));$('messages').append(hint)
+}
+async function loadMessages(){
+  const current=chosen();if(!current){showEmpty();return}
+  const key=account,id=current.id,mode=channel;
+  $('chatTitle').textContent=current.title;$('chatSubtitle').textContent=(mode==='wa'?'WhatsApp':'Telegram')+' · '+account+' · 只读消息';
+  $('chatAvatar').textContent=current.kind==='group'||current.kind==='tg'?'群':current.title.slice(0,1);
+  try{
+    const url=mode==='wa'?'/api/chat/whatsapp/'+encodeURIComponent(key)+'/chats/'+encodeURIComponent(id)+'/messages':
+      '/api/chat/telegram/'+encodeURIComponent(key)+'/'+encodeURIComponent(id)+'/messages';
+    const result=await api(url);
+    if(channel!==mode||account!==key||activeChat!==id)return;
+    const host=$('messages');clearElement(host);
+    if(!result.messages.length){host.append(child('div', '当前没有可展示的消息。已连接不等于已同步历史记录。','nochat'));return}
+    for(const item of result.messages){
+      const isMine=Boolean(item.fromMe),bubble=child('div',undefined,'bubble'+(isMine?' mine':''));
+      if(item.sender&&!isMine)bubble.append(child('div',item.sender,'sender'));
+      bubble.append(child('div',item.text,'bodytext'));
+      bubble.append(child('div',mode==='wa'?normalTime(item.timestamp):String(item.created_at||'').slice(11,16),'msgtime'));
+      host.append(bubble);
+    }
+    host.scrollTop=host.scrollHeight;
+  }catch(e){notify('聊天读取失败：'+e.message)}
+}
+function renderDetail(){
+  const t=chosen();
+  $('detailChannel').textContent=channel==='wa'?'WhatsApp':'Telegram';
+  $('detailAccount').textContent=account||'未连接';
+  $('detailJid').textContent=t?.id||'尚未选择会话';
+  $('routeForm').hidden=!(channel==='wa'&&t&&t.kind==='group');
+  const host=$('ruleList');clearElement(host);
+  const relevant=routes.filter(r=>
+    channel==='wa'?(r.wa_session===account && (!t||r.wa_group_jid===t.id)):(r.tg_account===account && (!t||r.tg_chat_id===t.id))
+  );
+  if(!relevant.length){host.append(child('div','当前没有对应映射'));return}
+  for(const rule of relevant){
+    const div=child('div',undefined,'rule');
+    div.append(child('div',rule.tg_account+' / '+rule.tg_chat_id),child('div','→ '+rule.wa_session+' / '+rule.wa_group_jid));
+    const btn=child('button',rule.enabled?'暂停规则':'启用规则','secondary');
+    btn.onclick=async()=>{try{await api('/api/routes/'+rule.id,'PATCH',{enabled:!rule.enabled});await syncCore(true);notify('规则状态已更新，不代表真实发送')}catch(e){notify(e.message)}};
+    div.append(btn);host.append(div)
+  }
+}
+async function startPair(){
+  const alias=$('newAlias').value.trim();
+  if(!/^[A-Za-z0-9_-]{1,64}$/.test(alias))return notify('账号别名只能为英文、数字、下划线或短横线');
+  try{
+    await api('/api/whatsapp/sessions/'+encodeURIComponent(alias)+'/connect','POST');
+    $('pairStatus').textContent='连接已发起，请刷新二维码状态';await refreshPair();await syncCore(true);
+  }catch(e){$('pairStatus').textContent='启动失败：'+e.message}
+}
+async function refreshPair(){
+  const alias=$('newAlias').value.trim();if(!alias)return;
+  try{
+    const result=await api('/api/whatsapp/sessions/'+encodeURIComponent(alias));
+    $('pairStatus').textContent='状态：'+result.status+(result.status==='qr_ready'?' · 用 WhatsApp 已关联设备扫码':'');
+    $('pairQr').hidden=!result.qr_data_uri;
+    if(result.qr_data_uri)$('pairQr').src=result.qr_data_uri;
+    if(result.status==='connected'){notify('WhatsApp 已连接，可以查看新消息');await syncCore(true)}
+  }catch(e){$('pairStatus').textContent=e.message}
+}
+async function showReviews(){
+  $('reviewModal').hidden=false;
+  const host=$('reviewList');clearElement(host);
+  try{
+    const deliveries=await api('/api/deliveries');
+    if(!deliveries.length){host.append(child('p','没有待审核记录'));return}
+    for(const d of deliveries.slice(0,35)){
+      const card=child('div',undefined,'rule');
+      card.append(child('div',d.tg_account+' / '+d.tg_chat_id+' → '+d.wa_session),child('div',d.text.slice(0,260)),child('div','状态：'+d.status));
+      if(d.status==='pending_review'){
+        for(const [label,action] of [['模拟通过','simulate'],['拒绝','reject']]){
+          const btn=child('button',label,'secondary');
+          btn.onclick=async()=>{try{await api('/api/deliveries/'+d.id+'/'+action,'POST');await showReviews()}catch(e){notify(e.message)}};
+          card.append(btn)
+        }
+      }
+      host.append(card)
+    }
+  }catch(e){host.append(child('p',e.message))}
+}
+$('loginBtn').onclick=async()=>{
+  const key=$('adminKey').value.trim();
+  if(!key)return;
+  adminKey=key;
+  try{
+    await api('/api/routes');
+    $('loginModal').hidden=true;$('adminKey').value='';
+    await syncCore(true);notify('管理授权成功 · 当前仅可读取与模拟审核');
+  }catch(e){adminKey='';$('loginError').textContent='授权失败：'+e.message}
+};
+$('adminKey').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').click()});
+$('waTab').onclick=()=>setChannel('wa');$('tgTab').onclick=()=>setChannel('tg');
+$('accountSelect').onchange=e=>{account=e.target.value;activeChat=null;loadThreads()};
+$('search').oninput=renderThreads;$('refresh').onclick=()=>syncCore();
+$('addAccount').onclick=()=>{$('pairModal').hidden=false;$('pairQr').hidden=true};
+$('pairStart').onclick=startPair;$('pairRefresh').onclick=refreshPair;$('pairClose').onclick=()=>{$('pairModal').hidden=true;syncCore(true)};
+$('reviewNav').onclick=showReviews;$('reviewClose').onclick=()=>{$('reviewModal').hidden=true};
+$('chatNav').onclick=()=>notify('当前已是聊天工作台');
+$('routeNav').onclick=()=>notify('选择一个 WhatsApp 群组，右侧即可创建和管理路由');
+$('settingsNav').onclick=()=>location.assign('/settings');
+$('chatwootBtn').onclick=()=>location.assign('/settings');
+$('lockNav').onclick=()=>{adminKey='';$('loginModal').hidden=false;state.sessions=[];state.tgThreads=[];account='';activeChat=null;threadData=[];renderThreads();showEmpty()};
+$('routeForm').onsubmit=async e=>{
+  e.preventDefault();
+  const t=chosen();
+  if(channel!=='wa'||t?.kind!=='group'){notify('请先选择一个 WhatsApp 群组');return}
+  const form=Object.fromEntries(new FormData(e.currentTarget));
+  try{
+    await api('/api/routes','POST',{...form,wa_session:account,wa_group_jid:t.id});
+    $('routeForm').reset();await syncCore(true);notify('映射已创建，默认停用');
+  }catch(err){notify(err.message)}
+};
+setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&!polling)syncCore(true)},7000);
+</script>
+</body></html>
