@@ -41,3 +41,14 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Real local HTTP integration smoke test (no external logins)
         run: python scripts/smoke_test.py
+      - name: Parse Windows launcher syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/start-windows.ps1", [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "Windows startup script has valid PowerShell syntax"
