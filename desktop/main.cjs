@@ -6,8 +6,8 @@ const net = require('node:net');
 const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 
-const API_PORT = 3100;
-const BRIDGE_PORT = 3101;
+let API_PORT = null;
+let BRIDGE_PORT = null;
 let window = null;
 let backend = null;
 let bridge = null;
@@ -45,11 +45,14 @@ function credentials() {
   }
   return obj;
 }
-async function available(port) {
-  return new Promise(resolve => {
-    const s = net.createServer();
-    s.once('error', () => resolve(false));
-    s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
+async function freeLocalPort() {
+  return new Promise((resolve,reject) => {
+    const socket=net.createServer();
+    socket.once('error',reject);
+    socket.listen(0,'127.0.0.1',()=>{
+      const port=socket.address().port;
+      socket.close(error=>error?reject(error):resolve(port));
+    });
   });
 }
 async function check(url, key, maxTime=1200) {
@@ -93,9 +96,11 @@ function environment(creds) {
   };
 }
 async function startServices() {
-  if (!await available(API_PORT) || !await available(BRIDGE_PORT)) {
-    throw new Error('本机 3100 或 3101 端口被占用。请先退出此前运行的小霸王后台或其他占用端口的程序。');
-  }
+  // Use desktop-private ephemeral ports: old dev servers on 3100/3101 do not
+  // interfere with the installed app. No need to kill other programs.
+  API_PORT=await freeLocalPort();
+  BRIDGE_PORT=await freeLocalPort();
+  while(BRIDGE_PORT===API_PORT) BRIDGE_PORT=await freeLocalPort();
   const creds=credentials();
   adminKey=creds.XBW_API_KEY;
   const env=environment(creds);
@@ -137,9 +142,14 @@ async function startServices() {
     await sleep(400);
   }
   if(!backendReady) throw new Error('聊天后台启动失败。请查看本机小霸王日志 backend-stderr.log。');
+  // No authentication tokens are ever written to the runtime-info file.
+  fs.writeFileSync(path.join(logsDir,'runtime.json'),
+    JSON.stringify({api_port:API_PORT,bridge_port:BRIDGE_PORT,mode:'read_only',version:'0.5.1'}),
+    {encoding:'utf8',mode:0o600});
 }
 function stopServices() {
   quitting=true;
+  if(logsDir){try{fs.unlinkSync(path.join(logsDir,'runtime.json'));}catch{}}
   for (const child of [backend,bridge]) {
     if(child && child.exitCode===null && !child.killed){ try {child.kill();} catch {} }
   }
@@ -162,6 +172,19 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   window.webContents.on('will-navigate',(event,url)=>{
     if(!url.startsWith('http://127.0.0.1:'+API_PORT+'/')) event.preventDefault();
+  });
+  window.webContents.on('did-finish-load',async()=>{
+    try {
+      const title=await window.webContents.executeJavaScript('document.title');
+      const layout=await window.webContents.executeJavaScript(
+        'Boolean(document.getElementById("threadList") && document.getElementById("messages"))'
+      );
+      log('desktop-ui', 'Rendered page: '+title+', chat layout: '+layout+'\n');
+      if(!layout) throw new Error('桌面窗口未载入新版聊天界面');
+      fs.writeFileSync(path.join(logsDir,'ui-ready.json'),
+        JSON.stringify({title,chat_layout:true,port:API_PORT}),
+        {encoding:'utf8',mode:0o600});
+    }catch(err){log('desktop-ui-error',errorMessage(err));}
   });
   window.once('ready-to-show',()=>window.show());
   window.loadURL('http://127.0.0.1:'+API_PORT+'/');
