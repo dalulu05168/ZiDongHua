@@ -2,11 +2,19 @@ name: XiaoBaWang baseline
 on:
   push:
   pull_request:
+permissions:
+  contents: read
 jobs:
   static-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Safety defaults
         run: |
           grep -qx 'DRY_RUN=true' .env.example
@@ -18,3 +26,7 @@ jobs:
         run: |
           cd router
           python -m unittest -v test_engine.py
+      - name: Telegram adapter syntax
+        run: python -m py_compile integrations/telegram/worker.py
+      - name: WhatsApp adapter syntax
+        run: node --check integrations/whatsapp/bridge.mjs
