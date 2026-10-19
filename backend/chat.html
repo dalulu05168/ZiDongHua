@@ -79,7 +79,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="sidehead">
 <div class="topline"><div><h1>聊天</h1><div class="hint">小霸王 · 多账号工作台</div></div><button class="iconbtn" id="refresh" title="同步消息">↻</button></div>
 <div class="segment"><button id="waTab" class="on">WhatsApp</button><button id="tgTab">Telegram</button></div>
-<div class="accountline"><select id="accountSelect" aria-label="选择账号"><option value="">尚无连接账号</option></select><button class="iconbtn" id="addAccount" title="添加 WhatsApp 账号">＋</button></div>
+<div class="accountline"><select id="accountSelect" aria-label="选择账号"><option value="">尚无连接账号</option></select><button class="iconbtn" id="addAccount" title="连接或恢复 WhatsApp 账号">＋</button><button class="iconbtn" id="pauseAccount" title="暂停选中账号，保留扫码凭据">Ⅱ</button></div>
 <input class="search" id="search" placeholder="搜索联系人或群组" aria-label="搜索会话">
 </div>
 <div class="statusline" id="sideStatus">等待授权…</div>
@@ -131,7 +131,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="notice" id="notice" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
-let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false;
+let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false,pairChecking=false;
 const state={sessions:[], tgThreads:[], bridgeOnline:false};
 function notify(text){const n=$('notice');n.textContent=String(text);n.hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.hidden=true,4300)}
 async function api(path,method='GET',data) {
@@ -144,7 +144,7 @@ function clearElement(node){node.replaceChildren()}
 function child(tag,txt,cls){const el=document.createElement(tag);if(txt!==undefined)el.textContent=String(txt);if(cls)el.className=cls;return el}
 function chosen(){return threadData.find(t=>t.id===activeChat)}
 function showSide(msg){$('sideStatus').textContent=msg}
-function setChannel(next){channel=next;activeChat=null;$('waTab').classList.toggle('on',next==='wa');$('tgTab').classList.toggle('on',next==='tg');$('addAccount').hidden=next!=='wa';renderAccounts();loadThreads()}
+function setChannel(next){channel=next;activeChat=null;$('waTab').classList.toggle('on',next==='wa');$('tgTab').classList.toggle('on',next==='tg');$('addAccount').hidden=next!=='wa';$('pauseAccount').hidden=next!=='wa';renderAccounts();loadThreads()}
 function renderAccounts(){
   const select=$('accountSelect');clearElement(select);
   const options=channel==='wa'?state.sessions.map(s=>({id:s.name,label:s.name+' · '+s.status})): [...new Set(state.tgThreads.map(t=>t.tg_account))].map(t=>({id:t,label:t}));
@@ -192,7 +192,7 @@ async function loadThreads(preserve=false){
         }));
         showSide(threadData.length+' 个会话 · 仅连接后观察到的消息');
       }catch(e){showSide('聊天读取失败：'+e.message)}
-    } else showSide('账号未连接 · 请扫码授权');
+    } else showSide(online?.status==='paused'?'账号已保存但已暂停 · 点击＋重新连接':'账号尚未在线 · 点击＋查看连接状态');
   } else showSide(state.bridgeOnline?'点击＋开始连接 WhatsApp 账号':'WhatsApp 桥接未连通 · 请检查 3101 端口');
   if(!preserve)activeChat=null;
   else activeChat=threadData.some(t=>t.id===old)?old:null;
@@ -270,7 +270,8 @@ async function startPair(){
   }catch(e){$('pairStatus').textContent='启动失败：'+e.message}
 }
 async function refreshPair(){
-  const alias=$('newAlias').value.trim();if(!alias)return;
+  const alias=$('newAlias').value.trim();if(!alias||pairChecking)return;
+  pairChecking=true;
   try{
     const result=await api('/api/whatsapp/sessions/'+encodeURIComponent(alias));
     $('pairStatus').textContent='状态：'+result.status+(result.status==='qr_ready'?' · 用 WhatsApp 已关联设备扫码':'');
@@ -278,6 +279,7 @@ async function refreshPair(){
     if(result.qr_data_uri)$('pairQr').src=result.qr_data_uri;
     if(result.status==='connected'){notify('WhatsApp 已连接，可以查看新消息');await syncCore(true)}
   }catch(e){$('pairStatus').textContent=e.message}
+  finally{pairChecking=false}
 }
 async function showReviews(){
   $('reviewModal').hidden=false;
@@ -313,7 +315,8 @@ $('adminKey').addEventListener('keydown',e=>{if(e.key==='Enter')$('loginBtn').cl
 $('waTab').onclick=()=>setChannel('wa');$('tgTab').onclick=()=>setChannel('tg');
 $('accountSelect').onchange=e=>{account=e.target.value;activeChat=null;loadThreads()};
 $('search').oninput=renderThreads;$('refresh').onclick=()=>syncCore();
-$('addAccount').onclick=()=>{$('pairModal').hidden=false;$('pairQr').hidden=true};
+$('addAccount').onclick=()=>{const chosen=state.sessions.find(s=>s.name===account);$('newAlias').value=chosen&&chosen.status!=='connected'?chosen.name:'';$('pairModal').hidden=false;$('pairQr').hidden=true};
+$('pauseAccount').onclick=async()=>{if(channel!=='wa'||!account)return notify('请先选择 WhatsApp 账号');const current=account;try{await api('/api/whatsapp/sessions/'+encodeURIComponent(current)+'/pause','POST');await syncCore(true);notify('账号 '+current+' 已暂停，授权凭据已保留，可再次连接')}catch(e){notify('暂停失败：'+e.message)}};
 $('pairStart').onclick=startPair;$('pairRefresh').onclick=refreshPair;$('pairClose').onclick=()=>{$('pairModal').hidden=true;syncCore(true)};
 $('reviewNav').onclick=showReviews;$('reviewClose').onclick=()=>{$('reviewModal').hidden=true};
 $('chatNav').onclick=()=>notify('当前已是聊天工作台');
@@ -332,6 +335,7 @@ $('routeForm').onsubmit=async e=>{
   }catch(err){notify(err.message)}
 };
 setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&!polling)syncCore(true)},7000);
+setInterval(()=>{if(adminKey&&!$('pairModal').hidden&&$('newAlias').value.trim()&&!pairChecking)refreshPair()},2500);
 
 // Desktop installer obtains its local-only key from the protected Electron process.
 // Browser users continue to use the manual key dialog.

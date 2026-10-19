@@ -38,6 +38,7 @@
           "bridge.mjs",
           "chatstore.mjs",
           "lifecycle.mjs",
+          "account-registry.mjs",
           "package.json"
         ]
       },

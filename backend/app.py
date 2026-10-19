@@ -246,6 +246,11 @@ def wa_sessions():
 def wa_connect(alias: str):
     return bridge("POST", "/v1/sessions/" + _alias(alias) + "/connect")
 
+@app.post("/api/whatsapp/sessions/{alias}/pause", dependencies=[Depends(admin)])
+def wa_pause(alias: str):
+    """Pause a WhatsApp account while retaining local authorization."""
+    return bridge("POST", "/v1/sessions/" + _alias(alias) + "/pause")
+
 @app.get("/api/whatsapp/sessions/{alias}", dependencies=[Depends(admin)])
 def wa_detail(alias: str):
     data = bridge("GET", "/v1/sessions/" + _alias(alias))
