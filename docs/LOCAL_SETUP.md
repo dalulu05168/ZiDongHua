@@ -59,3 +59,21 @@ python worker.py listen tg_01
 - Telegram 多个别名需要分别启动监听进程。
 - 未接通 Chatwoot；未测试实际扫码或 70/7 规模目标。
 - 后台默认只绑定本机 127.0.0.1，不要未经额外鉴权直接公开至互联网。
+
+## WhatsApp bridge unavailable (502) 排障
+
+- 管理后台可以打开，且路由页面能显示，但出现 `{"detail":"WhatsApp bridge unavailable"}`，说明 Python 后台没获得本机 Node 服务的正常响应。不能据此断言是密钥错误。
+- 首先确认本机的 `127.0.0.1:3101` 有服务在监听，且使用相同的 `XBW_BRIDGE_KEY`。新版启动脚本会在启动后台前进行带密钥的请求检查；失败会直接退出，并将错误记录在本地 `.logs/whatsapp-stderr.log`。
+- 如果想先在现有后台旁独立排查，可新开一个 PowerShell 窗口（勿关闭运行后台的窗口），从项目根目录执行：
+
+```powershell
+$s = Get-Content .\.secrets.local.json -Raw | ConvertFrom-Json
+$env:XBW_BRIDGE_KEY = $s.XBW_BRIDGE_KEY
+cd .\integrations\whatsapp
+node .\bridge.mjs
+```
+
+正常会看到 `WhatsApp bridge on 127.0.0.1 3101`。如果立即异常退出，查看终端的第一条错误（不要发送密钥、二维码、auth 文件）。
+- 如果 `3101` 端口已被占用，先检查是否存在旧 Node 进程；不要随意结束其他 Node 服务。
+- 不要公开 `.secrets.local.json`、`.logs/` 内可能敏感的信息。
+- 仅表示桥接服务启动，不表示账号已经扫码登录。即使桥接已修复，真实消息发送仍未实现。
