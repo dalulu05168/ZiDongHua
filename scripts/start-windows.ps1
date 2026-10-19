@@ -4,12 +4,12 @@ $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $PSScriptRoot)
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) { throw "Python launcher py not installed" }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "Node.js not installed" }
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw "npm not installed" }
+if (-not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw "npm not installed" }
 if (-not (Test-Path ".venv")) { py -m venv .venv }
 $python = Join-Path (Get-Location) ".venv\Scripts\python.exe"
 & $python -m pip install -r backend/requirements.txt
 Push-Location integrations/whatsapp
-try { npm install --no-audit --no-fund } finally { Pop-Location }
+try { & npm.cmd install --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" } } finally { Pop-Location }
 $secretPath = Join-Path (Get-Location) ".secrets.local.ps1"
 if (-not (Test-Path $secretPath)) {
     # Compatible with Windows PowerShell 5.1 (.NET Framework).
