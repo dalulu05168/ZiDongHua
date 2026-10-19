@@ -40,6 +40,11 @@ jobs:
         run: |
           python -c "import re,pathlib; s=pathlib.Path('backend/chat.html').read_text(encoding='utf-8'); scripts=re.findall(r'<script>(.*?)</script>',s,re.S); assert len(scripts)==1; pathlib.Path('backend/chat-inline-check.js').write_text(scripts[0],encoding='utf-8')"
           node --check backend/chat-inline-check.js
+      - name: Validate Electron desktop runtime syntax
+        run: |
+          node --check desktop/main.cjs
+          node --check desktop/preload.cjs
+          node -e "const p=require('./desktop/package.json'); if(!p.build.win || !p.build.extraResources)process.exit(1)"
       - name: Install Node bridge dependencies
         working-directory: integrations/whatsapp
         run: npm install --no-audit --no-fund
