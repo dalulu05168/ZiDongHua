@@ -78,7 +78,7 @@ def telegram_worker(x_tg_key: str | None = Header(default=None)):
 
 ACCOUNT = r"^[A-Za-z0-9_-]{1,64}$"
 CHAT = r"^-?[0-9]{1,30}$"
-WA_GROUP = r"^[0-9-]+@g\\.us$"
+WA_GROUP = r"^[0-9-]+@g\.us$"
 
 class NewRule(BaseModel):
     tg_account: str = Field(pattern=ACCOUNT)
