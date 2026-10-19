@@ -110,6 +110,10 @@ def _alias(value):
 
 @app.get("/", response_class=HTMLResponse)
 def homepage():
+    return (ROOT / "chat.html").read_text(encoding="utf-8")
+
+@app.get("/settings", response_class=HTMLResponse)
+def advanced_settings():
     return (ROOT / "index.html").read_text(encoding="utf-8")
 
 @app.get("/health")
