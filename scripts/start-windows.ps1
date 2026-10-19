@@ -62,12 +62,65 @@ $env:XBW_BRIDGE_HOST = "127.0.0.1"
 Write-Host "Local-only developer server, real messaging disabled."
 Write-Host "Local admin key is stored in .secrets.local.json. Never paste it into chat."
 Write-Host "Open http://127.0.0.1:3100"
+
+# Avoid a misleading 502 caused by a Node process that exited during startup.
+# Keep logs local only, and prove the bridge can be reached with the right key.
 $bridgeDir = Join-Path $projectRoot "integrations\whatsapp"
-$bridgeProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList "bridge.mjs" -WorkingDirectory $bridgeDir -PassThru -NoNewWindow
+$logDir = Join-Path $projectRoot ".logs"
+if (-not (Test-Path -LiteralPath $logDir)) {
+    New-Item -ItemType Directory -Path $logDir | Out-Null
+}
+$stdout = Join-Path $logDir "whatsapp-stdout.log"
+$stderr = Join-Path $logDir "whatsapp-stderr.log"
+$bridgeProcess = $null
 try {
+    # Do not silently reuse another service or an old copy of the bridge.
+    $listener = New-Object System.Net.Sockets.TcpClient
+    try {
+        $probe = $listener.BeginConnect("127.0.0.1", 3101, $null, $null)
+        if ($probe.AsyncWaitHandle.WaitOne(300)) {
+            try {
+                $listener.EndConnect($probe)
+                throw "Port 3101 is already in use. Stop any old bridge instance before starting again."
+            } catch [System.Net.Sockets.SocketException] {
+                # Port is not in use; starting a new bridge is safe.
+            }
+        }
+    } finally {
+        $listener.Close()
+    }
+
+    $bridgeProcess = Start-Process -FilePath (Get-Command node).Source `
+        -ArgumentList "bridge.mjs" -WorkingDirectory $bridgeDir -PassThru -NoNewWindow `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $ready = $false
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        $bridgeProcess.Refresh()
+        if ($bridgeProcess.HasExited) { break }
+        try {
+            $result = Invoke-RestMethod -Uri "http://127.0.0.1:3101/v1/sessions" `
+                -Headers @{"X-Bridge-Key" = $env:XBW_BRIDGE_KEY} `
+                -TimeoutSec 2 -ErrorAction Stop
+            $ready = $true
+            break
+        } catch {
+            # Retry while the bridge is initializing, never reveal credentials.
+        }
+    }
+    if (-not $ready) {
+        Write-Host "WhatsApp bridge did not pass startup verification."
+        Write-Host "Check local logs: $stderr"
+        if (Test-Path -LiteralPath $stderr) {
+            Get-Content -LiteralPath $stderr -Tail 12
+        }
+        throw "WhatsApp bridge unavailable; backend startup cancelled to prevent misleading 502 errors."
+    }
+    Write-Host "WhatsApp bridge verified on 127.0.0.1:3101."
     & $python -m uvicorn backend.app:app --host 127.0.0.1 --port 3100
 } finally {
-    if ($bridgeProcess -and -not $bridgeProcess.HasExited) {
-        Stop-Process -Id $bridgeProcess.Id -Force
+    if ($bridgeProcess) {
+        $bridgeProcess.Refresh()
+        if (-not $bridgeProcess.HasExited) { Stop-Process -Id $bridgeProcess.Id -Force }
     }
 }
