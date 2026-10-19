@@ -35,7 +35,7 @@ jobs:
       - name: WhatsApp adapter syntax
         run: |
           node --check integrations/whatsapp/bridge.mjs
-          node --test integrations/whatsapp/lifecycle.test.mjs integrations/whatsapp/chatstore.test.mjs
+          node --test integrations/whatsapp/lifecycle.test.mjs integrations/whatsapp/chatstore.test.mjs integrations/whatsapp/account-registry.test.mjs
       - name: Validate embedded chat frontend JavaScript
         run: |
           python -c "import re,pathlib; s=pathlib.Path('backend/chat.html').read_text(encoding='utf-8'); scripts=re.findall(r'<script>(.*?)</script>',s,re.S); assert len(scripts)==1; pathlib.Path('backend/chat-inline-check.js').write_text(scripts[0],encoding='utf-8')"
