@@ -131,7 +131,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="notice" id="notice" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
-let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false;
+let adminKey='',channel='wa',account='',activeChat=null,threadData=[],routes=[],polling=false,pairChecking=false;
 const state={sessions:[], tgThreads:[], bridgeOnline:false};
 function notify(text){const n=$('notice');n.textContent=String(text);n.hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.hidden=true,4300)}
 async function api(path,method='GET',data) {
@@ -270,7 +270,8 @@ async function startPair(){
   }catch(e){$('pairStatus').textContent='启动失败：'+e.message}
 }
 async function refreshPair(){
-  const alias=$('newAlias').value.trim();if(!alias)return;
+  const alias=$('newAlias').value.trim();if(!alias||pairChecking)return;
+  pairChecking=true;
   try{
     const result=await api('/api/whatsapp/sessions/'+encodeURIComponent(alias));
     $('pairStatus').textContent='状态：'+result.status+(result.status==='qr_ready'?' · 用 WhatsApp 已关联设备扫码':'');
@@ -278,6 +279,7 @@ async function refreshPair(){
     if(result.qr_data_uri)$('pairQr').src=result.qr_data_uri;
     if(result.status==='connected'){notify('WhatsApp 已连接，可以查看新消息');await syncCore(true)}
   }catch(e){$('pairStatus').textContent=e.message}
+  finally{pairChecking=false}
 }
 async function showReviews(){
   $('reviewModal').hidden=false;
@@ -333,6 +335,7 @@ $('routeForm').onsubmit=async e=>{
   }catch(err){notify(err.message)}
 };
 setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&!polling)syncCore(true)},7000);
+setInterval(()=>{if(adminKey&&!$('pairModal').hidden&&$('newAlias').value.trim()&&!pairChecking)refreshPair()},2500);
 
 // Desktop installer obtains its local-only key from the protected Electron process.
 // Browser users continue to use the manual key dialog.
