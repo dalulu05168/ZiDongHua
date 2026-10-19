@@ -26,6 +26,10 @@ jobs:
         run: |
           cd router
           python -m unittest -v test_engine.py
+      - name: Management API tests
+        run: |
+          python -m pip install -r backend/requirements.txt
+          python -m pytest -v backend/test_app.py
       - name: Telegram adapter syntax
         run: python -m py_compile integrations/telegram/worker.py
       - name: WhatsApp adapter syntax
