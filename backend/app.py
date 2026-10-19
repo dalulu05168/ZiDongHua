@@ -9,9 +9,11 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+
+from integrations.chatwoot.adapter import available, get_collection, validate_webhook
 
 ROOT = Path(__file__).resolve().parent
 
@@ -31,6 +33,11 @@ def db_connection():
 def init_db():
     with db_connection() as db:
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS chatwoot_events (
+            delivery_key TEXT PRIMARY KEY, event_type TEXT NOT NULL,
+            conversation_id TEXT, message_id TEXT,
+            received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS rules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tg_account TEXT NOT NULL, tg_chat_id TEXT NOT NULL,
@@ -248,3 +255,48 @@ def wa_detail(alias: str):
 @app.get("/api/whatsapp/sessions/{alias}/groups", dependencies=[Depends(admin)])
 def wa_groups(alias: str):
     return bridge("GET", "/v1/sessions/" + _alias(alias) + "/groups")
+
+@app.get("/api/chatwoot/status", dependencies=[Depends(admin)])
+def chatwoot_status():
+    return {"configured": available(), "mode": "read_only_webhook_audit", "outbound_enabled": False}
+
+@app.get("/api/chatwoot/{resource}", dependencies=[Depends(admin)])
+def chatwoot_resource(resource: str):
+    return get_collection(resource)
+
+@app.post("/api/chatwoot/webhook")
+async def chatwoot_webhook(request: Request,
+                          x_chatwoot_signature: str | None = Header(default=None),
+                          x_chatwoot_timestamp: str | None = Header(default=None),
+                          x_chatwoot_delivery: str | None = Header(default=None)):
+    raw = await request.body()
+    digest = validate_webhook(raw, x_chatwoot_signature, x_chatwoot_timestamp)
+    try:
+        payload = __import__("json").loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(400, "Invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Invalid event")
+    kind = str(payload.get("event", ""))[:80]
+    if kind not in ("message_created", "conversation_created", "conversation_updated"):
+        return {"ignored": True}
+    conversation = payload.get("conversation", {}) or {}
+    if not isinstance(conversation, dict):
+        conversation = {}
+    message = payload.get("message", {}) or {}
+    if not isinstance(message, dict):
+        message = {}
+    delivery = (x_chatwoot_delivery or digest)[:200]
+    with db_connection() as db:
+        result = db.execute(
+            "INSERT OR IGNORE INTO chatwoot_events(delivery_key,event_type,conversation_id,message_id) VALUES (?,?,?,?)",
+            (delivery, kind, str(conversation.get("id", ""))[:80], str(message.get("id", ""))[:80])
+        )
+        return {"recorded": result.rowcount == 1, "duplicate": result.rowcount == 0, "network_sent": False}
+
+@app.get("/api/chatwoot-events", dependencies=[Depends(admin)])
+def chatwoot_events():
+    with db_connection() as db:
+        return [dict(row) for row in db.execute(
+            "SELECT delivery_key,event_type,conversation_id,message_id,received_at FROM chatwoot_events ORDER BY received_at DESC LIMIT 100"
+        )]
