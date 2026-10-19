@@ -1,29 +1,37 @@
 # 小霸王 XiaoBaWang
 
-**状态：V0.4 聊天工作台开发原型（不是完整交付的软件）**。目标是支持 Telegram 授权群组监听与 WhatsApp 多账号、群组消息路由，并逐步集成 Chatwoot 客服工作台。翻译功能暂不开发。
+## 产品定位
+**目标是 Windows 本地安装的 WhatsApp / Telegram 多账号聊天工作台**，不是浏览器配置工具。参考跨平台聊天应用的多账户聚合体验，但不复制其商标或代码。当前翻译模块暂停。
 
-## 产品首页：WhatsApp 风格多账号聊天工作台
-- `/`：左侧账号/会话列表、中间只读聊天气泡、右侧 TG ↔ WA 群组映射和审核入口。
-- `/settings`：旧版系统配置与排障页面，保留兼容。
-- WhatsApp 列表和聊天消息来自 Baileys 已连接会话的内存观察缓存，**不提供完整历史聊天记录**；重启后消息缓存清空。
-- Telegram 聊天记录只包含已匹配启用规则而记录的消息，并非 Telegram 完整历史。
-- 聊天发送框明确停用，真实发送尚未实现。
+## Windows 本地安装包（V0.5 预览）
+[查看 Windows 安装包的 GitHub Actions 构建](https://github.com/dalulu05168/ZiDongHua/actions/workflows/windows-installer.yml)
 
-## 当前提交的功能
-- `backend/app.py` + `backend/chat.html` + `backend/index.html`：聊天工作台与本地管理网页，规则新建/启停、消息待审核列表、模拟通过/拒绝。
-- SQLite：持久化路由规则、已监听的消息及审核记录；按来源账号、群 ID、消息 ID 去重。
-- `integrations/telegram/worker.py`：Telethon 授权登录、群组枚举、只监听明确启用的群组文本消息。
-- `integrations/whatsapp/bridge.mjs`：Baileys 连接、二维码字符串查询、活跃账号列表和群组枚举；最多 7 个活跃连接的本地保护。
-- `router/`：独立离线消息路由示例和单元测试。
-- GitHub Actions：安全默认值、路由测试、后台 API 测试及 Python/Node 语法检查。
+构建通过后，在最近一次成功运行页的 **Artifacts** 中下载 `XiaoBaWang-Windows-Installer-Preview`，解压后运行 `XiaoBaWang-Setup-0.5.0-x64.exe`。这是尚未签名的开发预览安装包，Windows 可能提示未知发布者。**只有构建实际通过并出现 Artifact 才代表安装包已经生成。**
 
-## 严格限制
-**真实发送未实现，任何后台审核操作均为模拟操作，不会向 WhatsApp 发消息。**
-未完成真实 Telegram / WhatsApp 账号登录联调、Chatwoot 集成、断线自动重连、持续重试、访问控制加固、70 账号规模测试、Windows 安装程序。
+安装包目标：
+- 双击桌面快捷方式启动，无需用户手动安装 Python、Node.js、Docker 或运行 PowerShell。
+- 同一桌面窗口内显示 WhatsApp 风格账号与聊天列表、消息详情及群组映射。
+- 应用自动启动本地 FastAPI 与 Baileys；本地密钥和 WhatsApp 授权记录保存在 Windows 用户数据目录，不上传到 GitHub。
+- 真正的 WhatsApp 扫码仍要用户自己完成，系统不会代替账号持有人授权。
+- 用户运行环境不提供真实发送功能，避免误将预览版当成可群发的成品。
 
-使用指南见 [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)。项目当前在公开仓库中：严禁上传账号密码、密钥、会话文件、二维码或客户真实消息数据。
+### 尚未完成，不能当作已有功能
+- WhatsApp 真实账号的长期稳定登录与完整历史消息同步；目前只读取连接后的内存消息。
+- Telegram 在桌面内的账号登录 UI 与实际授权群组监听（已有 Telethon 脚本，但尚未打包进 GUI）。
+- Chatwoot 的完整客服分配、自动回复与收发同步。
+- 真实消息发送、文件与语音收发、70 个账号保存/7 个活跃账号的实际压力测试、Windows 代码签名。
+- 与 PanTGPT/HappyWord/HelloWorld 等产品的完整功能一致性。
 
-## 开源基础
-- [Chatwoot](https://github.com/chatwoot/chatwoot)（规划接入，尚未完成）
-- [Telethon](https://codeberg.org/Lonami/Telethon)
-- [Baileys](https://github.com/WhiskeySockets/Baileys)
+## 代码模块
+- `desktop/`：Electron 窗口、自动服务管理、Windows 安装打包。
+- `backend/`：FastAPI 本地接口、只读聊天工作台 HTML、SQLite 规则与审核。
+- `integrations/whatsapp/`：Baileys 多会话扫码、消息观察、群组读取。
+- `integrations/telegram/`：Telethon 开发接入脚本（未整合到安装程序）。
+- `integrations/chatwoot/`：Chatwoot 只读接口与 webhook 审计。
+- `router/`：安全路由与离线测试。
+
+## 安全
+仓库是**公开的**。不要提交 `.env`、`secrets.json`、`.secrets.local.json`、任何 `auth/` 或 `*.session`、二维码或个人聊天内容。
+真实发送默认关闭，`DRY_RUN=true`。
+
+更多调试信息：[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)。
