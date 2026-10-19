@@ -6,11 +6,14 @@ import pino from 'pino'
 import path from 'node:path'
 import { decision, safeAlias, activeCapacity } from './lifecycle.mjs'
 import { createChatStore, validChatJid } from './chatstore.mjs'
+import { createAccountRegistry } from './account-registry.mjs'
 
 const app = express()
 app.use(express.json({ limit: '32kb' }))
 const authKey = process.env.XBW_BRIDGE_KEY || ''
 const maxActive = Math.max(1, Math.min(7, Number(process.env.MAX_ACTIVE_SESSIONS || 7)))
+const authDir = path.resolve(process.env.WA_AUTH_DIR || './auth')
+const accountRegistry = createAccountRegistry({authDir, maxActive})
 const sessions = new Map()
 const restartCounts = new Map()
 const valid = safeAlias
@@ -24,11 +27,13 @@ async function connect(name) {
   if (!valid(name)) throw new Error('Invalid alias')
   if (sessions.has(name)) return sessions.get(name)
   if (!activeCapacity(sessions.size, maxActive)) throw new Error('Active session cap reached')
-  const authDir = path.resolve(process.env.WA_AUTH_DIR || './auth')
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(authDir, name))
+  accountRegistry.activate(name)
+  // Reserve a slot synchronously: concurrent connect requests must not exceed seven.
   const current = { status: 'connecting', qr: null, user: null, sock: null, chats: createChatStore(), retries: restartCounts.get(name) || 0, stopped: false }
   sessions.set(name, current)
   try {
+    const { state, saveCreds } = await useMultiFileAuthState(path.join(authDir, name))
+    if (sessions.get(name) !== current || current.stopped) return current
     const sock = makeWASocket({
       auth: state, logger: pino({ level: 'silent' }), markOnlineOnConnect: false
     })
@@ -66,7 +71,8 @@ async function connect(name) {
         const action = decision({ reason, restartRequired: DisconnectReason.restartRequired,
           wasStopped: current.stopped, retries: current.retries })
         sessions.delete(name)
-        if (action === 'restart') {
+        if (reason === DisconnectReason.loggedOut) accountRegistry.pause(name)
+        if (action === 'restart' && accountRegistry.isActive(name)) {
           current.retries += 1
           restartCounts.set(name, current.retries)
           // Reuse saved credentials; never copy QR/auth data into source control.
@@ -86,13 +92,32 @@ async function connect(name) {
 }
 
 app.get('/v1/sessions', (_req, res) => res.json(
-  [...sessions].map(([name, s]) => ({ name, status: s.status, user: s.user }))
+  accountRegistry.list().map(({ name, selected }) => ({
+    name, selected, status: sessions.get(name)?.status || (selected ? 'reconnecting' : 'paused'),
+    user: sessions.get(name)?.user || null
+  }))
 ))
 app.post('/v1/sessions/:name/connect', async (req, res) => {
   try {
     const s = await connect(req.params.name)
     res.json({ name: req.params.name, status: s.status })
   } catch (error) { res.status(400).json({ error: error.message }) }
+})
+// Pausing retains Baileys authorization on disk and frees an online slot.
+app.post('/v1/sessions/:name/pause', (req, res) => {
+  const name = req.params.name
+  if (!valid(name)) return res.status(400).json({ error: 'Invalid alias' })
+  try {
+    accountRegistry.pause(name)
+    const current = sessions.get(name)
+    if (current) {
+      current.stopped = true
+      sessions.delete(name)
+      try { current.sock?.end(new Error('Paused in XiaoBaWang')) } catch { /* already closed */ }
+    }
+    restartCounts.delete(name)
+    res.json({ name, status: 'paused', credentials_preserved: true })
+  } catch (error) { res.status(500).json({ error: 'Account pause failed' }) }
 })
 app.get('/v1/sessions/:name', (req, res) => {
   const s = sessions.get(req.params.name)
@@ -125,3 +150,10 @@ app.get('/v1/sessions/:name/chats/:jid/messages', (req, res) => {
 const host = process.env.XBW_BRIDGE_HOST || '127.0.0.1'
 const port = Number(process.env.XBW_BRIDGE_PORT || 3101)
 app.listen(port, host, () => console.log('WhatsApp bridge on', host, port))
+// Only previously selected accounts resume; saved/paused accounts stay offline.
+setImmediate(async () => {
+  for (const name of accountRegistry.active()) {
+    try { await connect(name) }
+    catch (error) { console.error('Account restore failed', name, error.message) }
+  }
+})
