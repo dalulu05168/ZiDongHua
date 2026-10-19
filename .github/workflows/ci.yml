@@ -1,0 +1,16 @@
+name: XiaoBaWang baseline
+on:
+  push:
+  pull_request:
+jobs:
+  static-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Safety defaults
+        run: |
+          grep -qx 'DRY_RUN=true' .env.example
+          grep -qx 'XBW_SEND_ENABLED=false' .env.example
+          grep -qx 'BAILEYS_SEND_ENABLED=false' .env.example
+          test -f README.md
+          test -f docs/ROADMAP.md
