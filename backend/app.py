@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from integrations.chatwoot.adapter import available, get_collection, validate_webhook
+from backend.telegram_service import TelegramService, TelegramError
 
 ROOT = Path(__file__).resolve().parent
 
@@ -54,6 +55,11 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(tg_account, tg_chat_id, tg_message_id)
         );
+        CREATE TABLE IF NOT EXISTS telegram_monitors (
+            alias TEXT NOT NULL, chat_id TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY(alias, chat_id)
+        );
         CREATE TABLE IF NOT EXISTS deliveries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_event_id INTEGER NOT NULL REFERENCES source_events(id),
@@ -66,10 +72,21 @@ def init_db():
         );
         """)
 
+def _desktop_event(alias, chat_id, message_id, text):
+    # Both standalone TG workers and in-app Telethon use this deduplicated queue.
+    return save_telegram_event(alias, chat_id, message_id, text)
+
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
-    yield
+    telegram_dir = Path(os.getenv("XBW_TG_DIR", str(Path(os.getenv("XBW_DB_PATH", "./data/xiaobawang.sqlite3")).parent / "telegram")))
+    service = TelegramService(telegram_dir, _desktop_event)
+    _app.state.telegram_service = service
+    service.start_restore()
+    try:
+        yield
+    finally:
+        await service.shutdown()
 
 app = FastAPI(title="小霸王 XiaoBaWang", version="0.4.0", lifespan=lifespan)
 
@@ -154,6 +171,79 @@ def update_route(rule_id: int, patch: ChangeRule):
             raise HTTPException(404, "Route not found")
     return {"id": rule_id, "enabled": patch.enabled}
 
+class TelegramLoginStart(BaseModel):
+    alias: str = Field(pattern=ACCOUNT)
+    api_id: int = Field(gt=0)
+    api_hash: str = Field(min_length=16, max_length=100)
+    phone: str = Field(pattern=r"^\+[0-9]{6,16}$")
+
+class TelegramLoginVerify(BaseModel):
+    code: str = Field(default="", max_length=16)
+    password: str = Field(default="", max_length=256)
+
+class TelegramGroupSelection(BaseModel):
+    chat_ids: list[str] = Field(max_length=500)
+
+def telegram_manager(request: Request):
+    return request.app.state.telegram_service
+
+def telegram_failure(exc):
+    # No secrets, authentication codes or account session data in responses.
+    if isinstance(exc, TelegramError):
+        raise HTTPException(400, str(exc)) from exc
+    raise HTTPException(503, "Telegram service is unavailable; check network and try again") from exc
+
+@app.get("/api/telegram/accounts", dependencies=[Depends(admin)])
+async def telegram_accounts(request: Request):
+    return telegram_manager(request).accounts()
+
+@app.post("/api/telegram/accounts/start", dependencies=[Depends(admin)])
+async def telegram_start(request: Request, body: TelegramLoginStart):
+    try:
+        return await telegram_manager(request).start(body.alias, body.api_id, body.api_hash, body.phone)
+    except Exception as exc:
+        telegram_failure(exc)
+
+@app.post("/api/telegram/accounts/{alias}/verify", dependencies=[Depends(admin)])
+async def telegram_verify(alias: str, body: TelegramLoginVerify, request: Request):
+    try:
+        return await telegram_manager(request).verify(_alias(alias), body.code, body.password)
+    except Exception as exc:
+        telegram_failure(exc)
+
+@app.get("/api/telegram/accounts/{alias}/groups", dependencies=[Depends(admin)])
+async def telegram_groups(alias: str, request: Request):
+    try:
+        return await telegram_manager(request).groups(_alias(alias))
+    except Exception as exc:
+        telegram_failure(exc)
+
+@app.get("/api/telegram/accounts/{alias}/monitors", dependencies=[Depends(admin)])
+def telegram_monitors(alias: str):
+    _alias(alias)
+    with db_connection() as db:
+        return [dict(x) for x in db.execute(
+            "SELECT chat_id, title, enabled FROM telegram_monitors WHERE alias=? ORDER BY title",
+            (alias,))]
+
+@app.put("/api/telegram/accounts/{alias}/monitors", dependencies=[Depends(admin)])
+async def update_telegram_monitors(alias: str, request: Request, selection: TelegramGroupSelection):
+    _alias(alias)
+    try:
+        groups = await telegram_manager(request).groups(alias)
+    except Exception as exc:
+        telegram_failure(exc)
+    available = {g["id"]: g["title"] for g in groups}
+    selected = list(dict.fromkeys(selection.chat_ids))
+    if any(c not in available for c in selected):
+        raise HTTPException(422, "Select groups from this authorized Telegram account")
+    with db_connection() as db:
+        db.execute("DELETE FROM telegram_monitors WHERE alias=?", (alias,))
+        db.executemany(
+            "INSERT INTO telegram_monitors(alias,chat_id,title,enabled) VALUES (?,?,?,1)",
+            [(alias, gid, available[gid]) for gid in selected])
+    return {"alias": alias, "selected": len(selected), "sending_enabled": False}
+
 @app.get("/api/telegram/allowed/{alias}", dependencies=[Depends(telegram_worker)])
 def telegram_allowed(alias: str):
     _alias(alias)
@@ -164,30 +254,35 @@ def telegram_allowed(alias: str):
         ).fetchall()
     return {"account": alias, "chat_ids": [x["tg_chat_id"] for x in chats]}
 
-@app.post("/api/telegram/events", dependencies=[Depends(telegram_worker)])
-def ingest_event(event: IncomingEvent):
+def save_telegram_event(alias: str, chat_id: str, message_id: str, text: str):
+    if not text or not text.strip():
+        return {"ignored": True, "created": 0, "duplicate": False}
     with db_connection() as db:
+        monitor = db.execute(
+            "SELECT enabled FROM telegram_monitors WHERE alias=? AND chat_id=?",
+            (alias, chat_id)).fetchone()
         matching = db.execute(
             "SELECT id,wa_session,wa_group_jid FROM rules WHERE enabled=1 AND tg_account=? AND tg_chat_id=?",
-            (event.tg_account, event.tg_chat_id)
-        ).fetchall()
-        if not matching:
+            (alias, chat_id)).fetchall()
+        if not matching and not (monitor and monitor["enabled"]):
             return {"ignored": True, "created": 0, "duplicate": False}
         try:
             record = db.execute(
                 "INSERT INTO source_events(tg_account,tg_chat_id,tg_message_id,text) VALUES (?,?,?,?)",
-                (event.tg_account, event.tg_chat_id, event.tg_message_id, event.text)
-            )
+                (alias, chat_id, message_id, text[:8000]))
         except sqlite3.IntegrityError:
             return {"ignored": False, "created": 0, "duplicate": True}
         ids = []
         for rule in matching:
             saved = db.execute(
                 "INSERT INTO deliveries(source_event_id,rule_id,wa_session,wa_group_jid) VALUES (?,?,?,?)",
-                (record.lastrowid, rule["id"], rule["wa_session"], rule["wa_group_jid"])
-            )
+                (record.lastrowid,rule["id"],rule["wa_session"],rule["wa_group_jid"]))
             ids.append(saved.lastrowid)
-        return {"ignored": False, "created": len(ids), "duplicate": False, "delivery_ids": ids}
+        return {"ignored": False, "created": len(ids), "duplicate": False, "delivery_ids": ids, "network_sent": False}
+
+@app.post("/api/telegram/events", dependencies=[Depends(telegram_worker)])
+def ingest_event(event: IncomingEvent):
+    return save_telegram_event(event.tg_account, event.tg_chat_id, event.tg_message_id, event.text)
 
 @app.get("/api/deliveries", dependencies=[Depends(admin)])
 def deliveries():
@@ -349,5 +444,5 @@ def telegram_chat_messages(alias: str, chat_id: str):
             ORDER BY id DESC LIMIT 150
         """, (alias, chat_id)).fetchall()
         return {"messages": [dict(row) for row in reversed(rows)],
-                "scope": "observed_after_route_enabled",
+                "scope": "observed_after_monitor_enabled",
                 "sending_enabled": False}

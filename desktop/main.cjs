@@ -85,6 +85,7 @@ function environment(creds) {
     ...creds,
     XBW_DB_PATH:path.join(root,'data','xiaobawang.sqlite3'),
     WA_AUTH_DIR:waDir,
+    XBW_TG_DIR:path.join(root,'telegram'),
     DRY_RUN:'true',
     XBW_SEND_ENABLED:'false',
     BAILEYS_SEND_ENABLED:'false',

@@ -23,7 +23,7 @@ V0.5.1 桌面客户端为自身服务选择独立空闲本地端口，不再依�
 
 ### 尚未完成，不能当作已有功能
 - WhatsApp 真实账号的长期稳定登录与完整历史消息同步；目前只读取连接后的内存消息。
-- Telegram 在桌面内的账号登录 UI 与实际授权群组监听（已有 Telethon 脚本，但尚未打包进 GUI）。
+- Telegram 在桌面内的账号登录 UI 与实际授权群组监听：**本分支已加入 Telethon 及 UI，但还没有使用真实账号完成端到端验证**。首次授权需要你自己的 Telegram API ID、API Hash、手机号与验证码（如有两步验证还需要密码），全部在桌面内输入；打包由 CI 验证。
 - Chatwoot 的完整客服分配、自动回复与收发同步。
 - 真实消息发送、文件与语音收发、70 个账号保存/7 个活跃账号的实际压力测试、Windows 代码签名。
 - 与 PanTGPT/HappyWord/HelloWorld 等产品的完整功能一致性。
@@ -32,7 +32,7 @@ V0.5.1 桌面客户端为自身服务选择独立空闲本地端口，不再依�
 - `desktop/`：Electron 窗口、自动服务管理、Windows 安装打包。
 - `backend/`：FastAPI 本地接口、只读聊天工作台 HTML、SQLite 规则与审核。
 - `integrations/whatsapp/`：Baileys 多会话扫码、消息观察、群组读取。
-- `integrations/telegram/`：Telethon 开发接入脚本（未整合到安装程序）。
+- `backend/telegram_service.py`：桌面内 Telethon 授权、2FA、群组选择、只读监听；Windows DPAPI 加密 API 凭据，Telethon 会话留在本机用户目录。`integrations/telegram/` 为兼容旧版的独立开发脚本。
 - `integrations/chatwoot/`：Chatwoot 只读接口与 webhook 审计。
 - `router/`：安全路由与离线测试。
 

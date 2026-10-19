@@ -9,6 +9,16 @@ on:
       - 'backend/**'
       - 'integrations/whatsapp/**'
       - 'integrations/chatwoot/**'
+      - 'integrations/telegram/**'
+      - '.github/workflows/windows-installer.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'backend/**'
+      - 'integrations/whatsapp/**'
+      - 'integrations/chatwoot/**'
+      - 'integrations/telegram/**'
       - '.github/workflows/windows-installer.yml'
 
 permissions:
@@ -37,6 +47,11 @@ jobs:
           python -m pip install -r backend/requirements.txt
           python -m pip install "pyinstaller>=6.12,<7"
 
+      - name: Verify Windows DPAPI protects local Telegram API credentials
+        shell: pwsh
+        run: |
+          python -c "from backend.telegram_service import _dpapi; raw=b'xiaobawang-test-only'; wrapped=_dpapi(raw); assert wrapped!=raw; assert _dpapi(wrapped,decrypt=True)==raw; print('PASS: DPAPI roundtrip')"
+
       - name: Build self-contained localhost API executable
         shell: pwsh
         run: |
@@ -44,6 +59,7 @@ jobs:
             --add-data "backend/chat.html;backend" `
             --add-data "backend/index.html;backend" `
             --collect-all qrcode `
+            --collect-all telethon `
             backend/desktop_entry.py
           if (!(Test-Path dist/xiaobawang-backend.exe)) { throw "Backend executable missing" }
 
@@ -75,6 +91,10 @@ jobs:
             }
             $page = Invoke-WebRequest "http://127.0.0.1:3118/" -UseBasicParsing
             $settings = Invoke-WebRequest "http://127.0.0.1:3118/settings" -UseBasicParsing
+            if ($page.Content -notmatch 'id="tgLoginModal"' -or
+                $page.Content -notmatch 'id="tgGroupsModal"') {
+              throw "Packaged desktop lacks Telegram authorization UI"
+            }
             if ($page.Content -notmatch 'id="threadList"' -or
                 $page.Content -notmatch 'id="messages"' -or
                 $page.Content -match "V0.2 · 仅模拟") {
