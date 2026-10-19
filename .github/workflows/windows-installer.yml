@@ -11,6 +11,15 @@ on:
       - 'integrations/chatwoot/**'
       - 'integrations/telegram/**'
       - '.github/workflows/windows-installer.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'backend/**'
+      - 'integrations/whatsapp/**'
+      - 'integrations/chatwoot/**'
+      - 'integrations/telegram/**'
+      - '.github/workflows/windows-installer.yml'
 
 permissions:
   contents: read
