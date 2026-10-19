@@ -74,8 +74,17 @@ jobs:
               throw "Packaged backend startup failed"
             }
             $page = Invoke-WebRequest "http://127.0.0.1:3118/" -UseBasicParsing
-            if ($page.Content -notmatch "小霸王") { throw "Packaged chat homepage missing" }
-            Write-Host "PASS: packaged Python backend served native chat page"
+            $settings = Invoke-WebRequest "http://127.0.0.1:3118/settings" -UseBasicParsing
+            if ($page.Content -notmatch 'id="threadList"' -or
+                $page.Content -notmatch 'id="messages"' -or
+                $page.Content -match "V0.2 · 仅模拟") {
+              throw "Backend still serves obsolete settings layout at homepage"
+            }
+            if ($settings.Content -notmatch 'id="threadList"' -or
+                $settings.Content -match "V0.2 · 仅模拟") {
+              throw "Obsolete V0.2 page remains available via /settings"
+            }
+            Write-Host "PASS: packaged backend serves compact chat UI on / and /settings"
           } finally {
             $proc.Refresh()
             if (!$proc.HasExited) { Stop-Process -Id $proc.Id -Force }
@@ -126,16 +135,31 @@ jobs:
             Get-ChildItem $target -Filter "*.exe" -Recurse | Select-Object FullName
             throw "Installed desktop executable is missing"
           }
+          $logdir = Join-Path $env:APPDATA "小霸王/logs"
+          $runtimeFile = Join-Path $logdir "runtime.json"
+          $uiReadyFile = Join-Path $logdir "ui-ready.json"
+          Remove-Item -LiteralPath $runtimeFile, $uiReadyFile -Force -ErrorAction SilentlyContinue
           $desktop = Start-Process -FilePath $exe -PassThru
           try {
             $healthy = $false
-            for($i=0; $i -lt 80; $i++) {
+            for($i=0; $i -lt 110; $i++) {
               Start-Sleep -Milliseconds 750
               $desktop.Refresh()
               if($desktop.HasExited){ break }
+              if(!(Test-Path $runtimeFile) -or !(Test-Path $uiReadyFile)){ continue }
               try {
-                $response = Invoke-RestMethod -Uri "http://127.0.0.1:3100/health" -TimeoutSec 2
-                if($response.real_sending -eq $false) { $healthy=$true; break }
+                $runtime = Get-Content $runtimeFile -Raw | ConvertFrom-Json
+                $ui = Get-Content $uiReadyFile -Raw | ConvertFrom-Json
+                $response = Invoke-RestMethod -Uri ("http://127.0.0.1:" + $runtime.api_port + "/health") -TimeoutSec 2
+                $page = Invoke-WebRequest -Uri ("http://127.0.0.1:" + $runtime.api_port + "/") -UseBasicParsing
+                if($response.real_sending -eq $false -and
+                   $runtime.api_port -ne 3100 -and $runtime.bridge_port -ne 3101 -and
+                   $page.Content -match 'id="threadList"' -and
+                   $page.Content -notmatch "V0.2 · 仅模拟" -and
+                   $ui.chat_layout -eq $true -and
+                   $ui.title -match "多账号聊天工作台") {
+                  $healthy=$true; break
+                }
               } catch {}
             }
             if(!$healthy) {
@@ -149,8 +173,8 @@ jobs:
               }
               throw "Installed desktop app did not start localhost services"
             }
-            Write-Host "PASS: silent Windows installer and packaged Electron app launch"
-            Write-Host "PASS: bundled backend is healthy; real message sending remains disabled"
+            Write-Host "PASS: installed Electron renderer loaded real 3-column chat UI, not V0.2 form"
+            Write-Host "PASS: private ports avoid old 3100/3101 background services; real sending disabled"
           } finally {
             $desktop.Refresh()
             if(!$desktop.HasExited){Stop-Process -Id $desktop.Id -Force}
