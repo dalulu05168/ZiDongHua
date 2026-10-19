@@ -12,9 +12,16 @@ Push-Location integrations/whatsapp
 try { npm install --no-audit --no-fund } finally { Pop-Location }
 $secretPath = Join-Path (Get-Location) ".secrets.local.ps1"
 if (-not (Test-Path $secretPath)) {
-    $admin = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-    $tg = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-    $bridge = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    # Compatible with Windows PowerShell 5.1 (.NET Framework).
+    function New-LocalSecret {
+        $bytes = New-Object byte[] 32
+        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+        return ([System.BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
+    }
+    $admin = New-LocalSecret
+    $tg = New-LocalSecret
+    $bridge = New-LocalSecret
     @(
       '$env:XBW_API_KEY="' + $admin + '"',
       '$env:XBW_TG_KEY="' + $tg + '"',
