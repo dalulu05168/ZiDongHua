@@ -26,6 +26,11 @@ $env:DRY_RUN="true"
 $env:XBW_SEND_ENABLED="false"
 $env:BAILEYS_SEND_ENABLED="false"
 Write-Host "Local dev server only. Never share .secrets.local.ps1."
-Write-Host "Start bridge in another PowerShell session: cd integrations/whatsapp; node bridge.mjs"
 Write-Host "Backend URL: http://127.0.0.1:3100"
-& $python -m uvicorn backend.app:app --host 127.0.0.1 --port 3100
+$bridgeDir = Join-Path (Get-Location) "integrations/whatsapp"
+$bridgeProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList "bridge.mjs" -WorkingDirectory $bridgeDir -PassThru -NoNewWindow
+try {
+    & $python -m uvicorn backend.app:app --host 127.0.0.1 --port 3100
+} finally {
+    if (-not $bridgeProcess.HasExited) { Stop-Process -Id $bridgeProcess.Id -Force }
+}
