@@ -1,0 +1,61 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>小霸王 | 管理台</title>
+<style>
+:root{font-family:system-ui,"Microsoft YaHei",sans-serif;color:#142b43;background:#f4f7fb}*{box-sizing:border-box}
+body{margin:0}header{padding:22px 28px;color:white;background:#102d50;display:flex;align-items:center;justify-content:space-between;gap:12px}
+header h1{margin:0;font-size:24px}header small{display:block;margin-top:4px;color:#c6d8ef}
+main{max-width:1180px;margin:auto;padding:22px;display:grid;gap:16px}section{border:1px solid #dde4ee;background:white;border-radius:13px;padding:18px;min-width:0}
+h2{font-size:17px;margin:0 0 13px}.controls{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+input{padding:11px;border:1px solid #ced8e7;border-radius:8px;min-width:160px;flex:1}
+button{padding:9px 13px;background:#174679;color:white;border:0;border-radius:8px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}button.secondary{background:#eef3f8;color:#174679}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #e5eaf0;overflow-wrap:anywhere}
+th{color:#60758b}.scroll{overflow:auto}#notice{white-space:pre-wrap;color:#315570}#qr{max-width:240px;display:block;margin-top:12px}
+.status{color:#b05214;font-weight:600}small{color:#60758b}
+</style></head><body>
+<header><div><h1>小霸王 · XiaoBaWang</h1><small>Telegram → WhatsApp · 多账号与群组路由</small></div><span>V0.2 · 仅模拟，不会真实发送</span></header>
+<main>
+<section><h2>管理端授权</h2><div class="controls"><input type="password" id="key" placeholder="输入本地 XBW_API_KEY（仅保存在此页面）" autocomplete="off"><button id="refresh">刷新后台数据</button></div><p id="notice" role="status">后端必须先启动。请勿向任何人提供登录密钥或扫码二维码。</p></section>
+<div class="grid">
+<section><h2>WhatsApp 多账号连接</h2><div class="controls"><input id="waAlias" placeholder="账号别名，如 wa_01"><button id="connectWa">开始连接</button><button class="secondary" id="waState">查看扫码</button></div><p id="waResult"></p><img id="qr" alt="WhatsApp 登录二维码" hidden><h2>在线会话</h2><div id="sessions">尚未加载</div><div id="groups"></div></section>
+<section><h2>新建 Telegram → WhatsApp 路由</h2><small>仅允许已授权群组。新规则默认关闭，必须主动启用。</small><form id="ruleForm" style="display:grid;gap:8px;margin-top:12px"><input name="tg_account" placeholder="Telegram 账号别名" required><input name="tg_chat_id" placeholder="TG 群组 ID，如 -100123456" required><input name="wa_session" placeholder="WhatsApp 账号别名" required><input name="wa_group_jid" placeholder="目标群组 JID，如 12345@g.us" required><button type="submit">保存规则（默认停用）</button></form></section>
+</div>
+<section><h2>群组路由规则</h2><div class="scroll" id="rules">尚未加载</div></section>
+<section><h2>消息审核与模拟操作</h2><small>审核操作只更新数据库，不向 WhatsApp 发送内容。</small><div class="scroll" id="deliveries">尚未加载</div></section>
+<section><h2>Chatwoot 工作台</h2><p>Chatwoot 的客服收件箱、联系人和自动回复尚未集成。本页面不会将其描述为已完成。</p></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function show(message){$('notice').textContent=String(message)}
+async function api(url,method='GET',payload){
+ const key=$('key').value;if(!key)throw Error('先填写本地管理密钥');
+ const resp=await fetch(url,{method,headers:{'X-API-Key':key,'Content-Type':'application/json'},body:payload?JSON.stringify(payload):undefined,cache:'no-store'});
+ if(!resp.ok)throw Error('接口 '+resp.status+' : '+(await resp.text()).slice(0,180));
+ return resp.json();
+}
+function element(tag,text){const el=document.createElement(tag);el.textContent=String(text);return el}
+function table(container,headers,rows){const t=document.createElement('table'),thead=t.createTHead().insertRow();headers.forEach(h=>thead.append(element('th',h)));const b=t.createTBody();rows.forEach(items=>{const r=b.insertRow();items.forEach(item=>{const td=r.insertCell();if(item instanceof Node)td.append(item);else td.textContent=String(item)})});container.replaceChildren(t)}
+async function refresh(){
+ try{const [rules,deliveries]=await Promise.all([api('/api/routes'),api('/api/deliveries')]);
+ table($('rules'),['TG 来源','WA 目标','状态','管理'],rules.map(r=>{
+ const toggle=element('button',r.enabled?'暂停':'启用');toggle.onclick=()=>action('/api/routes/'+r.id,'PATCH',{enabled:!r.enabled});
+ return [r.tg_account+' / '+r.tg_chat_id,r.wa_session+' / '+r.wa_group_jid,r.enabled?'已启用':'已暂停',toggle]}));
+ table($('deliveries'),['来源','内容','状态','操作'],deliveries.map(d=>{
+ const box=document.createElement('div');
+ if(d.status==='pending_review'){for(const [label,path] of [['模拟通过','simulate'],['拒绝','reject']]){const btn=element('button',label);btn.style.marginRight='6px';btn.onclick=()=>action('/api/deliveries/'+d.id+'/'+path,'POST');box.append(btn)}}
+ return [d.tg_account+' / '+d.tg_chat_id,d.text.slice(0,140),d.status,box]}));
+ try{const accounts=await api('/api/whatsapp/sessions');$('sessions').textContent=accounts.map(a=>a.name+'：'+a.status).join('、')||'暂无活跃账号'}catch(e){$('sessions').textContent='WhatsApp 桥接未连通'}
+ show('数据已更新 · 所有发送只模拟');
+ }catch(e){show(e.message)}
+}
+async function action(url,method,payload){try{await api(url,method,payload);await refresh()}catch(e){show(e.message)}}
+$('refresh').onclick=refresh;
+$('ruleForm').onsubmit=async e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));await action('/api/routes','POST',fields)};
+$('connectWa').onclick=()=>action('/api/whatsapp/sessions/'+encodeURIComponent($('waAlias').value)+'/connect','POST');
+$('waState').onclick=async()=>{try{
+ const alias=encodeURIComponent($('waAlias').value);
+ const state=await api('/api/whatsapp/sessions/'+alias);$('waResult').textContent='状态：'+state.status;
+ $('qr').hidden=!state.qr_data_uri;if(state.qr_data_uri)$('qr').src=state.qr_data_uri;
+ if(state.status==='connected'){const groups=await api('/api/whatsapp/sessions/'+alias+'/groups');$('groups').textContent='可访问群组：'+groups.map(g=>g.subject+' ('+g.id+')').join('，')}
+ }catch(e){show(e.message)}};
+</script></body></html>
