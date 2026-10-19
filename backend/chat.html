@@ -5,16 +5,16 @@
 <title>小霸王 · 多账号聊天工作台</title>
 <style>
 :root{font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif;color:#1d3148;background:#f1f5f9}
-*{box-sizing:border-box}body{margin:0;min-height:100vh}button,input,select{font:inherit}
+*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{margin:0;min-height:0}button,input,select{font:inherit}
 button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.55}
-.workspace{display:grid;grid-template-columns:64px 330px minmax(340px,1fr) 305px;height:100vh;min-height:620px;overflow:hidden}
-.rail{background:#112d4a;color:#d4e5f2;display:flex;flex-direction:column;align-items:center;padding:16px 8px;gap:16px}
+.workspace{display:grid;grid-template-columns:56px 302px minmax(360px,1fr) 280px;height:100vh;height:100dvh;min-height:0;overflow:hidden}
+.rail{background:#112d4a;color:#d4e5f2;display:flex;flex-direction:column;align-items:center;padding:12px 6px;gap:10px}
 .brand{width:44px;height:44px;border-radius:13px;background:#2375b8;color:white;font-size:19px;font-weight:800;display:grid;place-items:center}
 .railbutton{border:0;background:transparent;color:#c6d9ea;width:44px;height:44px;border-radius:12px;font-size:21px}
 .railbutton.active,.railbutton:hover{background:#285276;color:white}
 .bottom{margin-top:auto}
 .sidebar{display:flex;flex-direction:column;min-width:0;background:#fff;border-right:1px solid #e0e7ef}
-.sidehead{padding:23px 20px 14px}
+.sidehead{padding:15px 15px 10px}
 .topline{display:flex;align-items:center;justify-content:space-between}
 h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 .sidehead .hint{font-size:12px;color:#8193a6;margin-top:5px}
@@ -126,6 +126,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div class="muted" id="pairStatus">未发起连接</div><img id="pairQr" alt="WhatsApp 扫码二维码" hidden>
 <button class="secondary" id="pairRefresh">刷新扫码状态</button><button class="secondary" id="pairClose">关闭</button>
 </div></div>
+<div class="modalbg" id="settingsModal" hidden><div class="modal"><h2>小霸王 · 系统设置</h2><p>这里仅展示必要的本机服务状态，群组路由请在右侧操作。不会再显示旧版 V0.2 表单后台。</p><div class="detailbox"><div class="fieldlabel">当前模式</div><div class="detailval">只读消息 / 审核模拟；真实发送关闭</div><div class="fieldlabel">系统状态</div><div class="detailval" id="settingStatus">检查中</div><div class="fieldlabel">Chatwoot</div><div class="detailval" id="settingChatwoot">尚未配置</div></div><button class="primary" id="settingClose">返回聊天</button></div></div>
 <div class="modalbg" id="reviewModal" hidden>
 <div class="modal"><h2>待审核消息</h2><p>这里只能模拟通过或拒绝，绝不会实际群发。</p><div id="reviewList"></div><button class="secondary" id="reviewClose">关闭</button></div></div>
 <div class="notice" id="notice" hidden></div>
@@ -321,8 +322,15 @@ $('pairStart').onclick=startPair;$('pairRefresh').onclick=refreshPair;$('pairClo
 $('reviewNav').onclick=showReviews;$('reviewClose').onclick=()=>{$('reviewModal').hidden=true};
 $('chatNav').onclick=()=>notify('当前已是聊天工作台');
 $('routeNav').onclick=()=>notify('选择一个 WhatsApp 群组，右侧即可创建和管理路由');
-$('settingsNav').onclick=()=>location.assign('/settings');
-$('chatwootBtn').onclick=()=>location.assign('/settings');
+async function openSettings(){
+  $('settingsModal').hidden=false;
+  $('settingStatus').textContent=state.bridgeOnline?'聊天后台与 WhatsApp 桥接已响应':'WhatsApp 桥接尚未连接';
+  try{const item=await api('/api/chatwoot/status');$('settingChatwoot').textContent=item.configured?'已配置只读接口':'未配置，客服分配尚不可用'}
+  catch(e){$('settingChatwoot').textContent='暂不可用：'+e.message}
+}
+$('settingsNav').onclick=openSettings;
+$('chatwootBtn').onclick=openSettings;
+$('settingClose').onclick=()=>{$('settingsModal').hidden=true};
 $('lockNav').onclick=()=>{adminKey='';$('loginModal').hidden=false;state.sessions=[];state.tgThreads=[];account='';activeChat=null;threadData=[];renderThreads();showEmpty()};
 $('routeForm').onsubmit=async e=>{
   e.preventDefault();
@@ -334,7 +342,7 @@ $('routeForm').onsubmit=async e=>{
     $('routeForm').reset();await syncCore(true);notify('映射已创建，默认停用');
   }catch(err){notify(err.message)}
 };
-setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&!polling)syncCore(true)},7000);
+setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&$('settingsModal').hidden&&!polling)syncCore(true)},7000);
 setInterval(()=>{if(adminKey&&!$('pairModal').hidden&&$('newAlias').value.trim()&&!pairChecking)refreshPair()},2500);
 
 // Desktop installer obtains its local-only key from the protected Electron process.
