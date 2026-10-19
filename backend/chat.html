@@ -332,5 +332,23 @@ $('routeForm').onsubmit=async e=>{
   }catch(err){notify(err.message)}
 };
 setInterval(()=>{if(adminKey&&$('loginModal').hidden&&$('pairModal').hidden&&!polling)syncCore(true)},7000);
+
+// Desktop installer obtains its local-only key from the protected Electron process.
+// Browser users continue to use the manual key dialog.
+(async function desktopLogin() {
+  if (!window.xbwDesktop || typeof window.xbwDesktop.authorize !== 'function') return;
+  try {
+    const token = await window.xbwDesktop.authorize();
+    if (!token) throw Error('No desktop authorization');
+    adminKey = token;
+    await api('/api/routes');
+    $('loginModal').hidden = true;
+    await syncCore(true);
+  } catch (error) {
+    adminKey = '';
+    $('loginModal').hidden = false;
+    $('loginError').textContent = '桌面本地授权异常：' + error.message;
+  }
+})();
 </script>
 </body></html>
