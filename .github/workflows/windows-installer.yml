@@ -9,6 +9,7 @@ on:
       - 'backend/**'
       - 'integrations/whatsapp/**'
       - 'integrations/chatwoot/**'
+      - 'integrations/telegram/**'
       - '.github/workflows/windows-installer.yml'
 
 permissions:
@@ -44,6 +45,7 @@ jobs:
             --add-data "backend/chat.html;backend" `
             --add-data "backend/index.html;backend" `
             --collect-all qrcode `
+            --collect-all telethon `
             backend/desktop_entry.py
           if (!(Test-Path dist/xiaobawang-backend.exe)) { throw "Backend executable missing" }
 
