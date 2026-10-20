@@ -42,6 +42,12 @@ async function connect(name) {
     sock.ev.on('messages.upsert', ({ messages = [] }) => {
       for (const message of messages) current.chats.seeMessage(message)
     })
+    // Initial phone history is asynchronous and may arrive after QR login.
+    // Store only a bounded in-memory view for the local chat workspace.
+    sock.ev.on('messaging-history.set', payload => {
+      if (sessions.get(name) !== current) return
+      current.chats.ingestHistory(payload)
+    })
     sock.ev.on('chats.upsert', chatList => {
       for (const chat of chatList || []) current.chats.setTitle(chat.id, chat.name || chat.subject || '')
     })
@@ -143,7 +149,7 @@ app.get('/v1/sessions/:name/groups', async (req, res) => {
 app.get('/v1/sessions/:name/chats', (req, res) => {
   const s = sessions.get(req.params.name)
   if (!s || s.status !== 'connected') return res.status(409).json({ error: 'Not connected' })
-  res.json({ chats: s.chats.list(), scope: 'observed_since_connection', sending_enabled: false })
+  res.json({ chats: s.chats.list(), scope: 'available_history_sync_and_live', sending_enabled: false })
 })
 app.get('/v1/sessions/:name/chats/:jid/messages', (req, res) => {
   const s = sessions.get(req.params.name)
