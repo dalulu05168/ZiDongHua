@@ -91,7 +91,7 @@ h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.5px}
 <div><div class="chattitle" id="chatTitle">选择一个聊天</div><div class="chatsub" id="chatSubtitle">查看来自已授权账号的消息</div></div>
 <div class="chatspacer"></div><span class="chip">只读 · 真实发送未启用</span>
 </header>
-<section class="messages" id="messages"><div class="nochat"><div class="illustration">▦</div><strong>欢迎使用小霸王聊天工作台</strong><p>请在左侧选择账号和聊天。WhatsApp 只能读取连接后观察到的消息，Telegram 只显示已被监听记录的消息。</p></div></section>
+<section class="messages" id="messages"><div class="nochat"><div class="illustration">▦</div><strong>欢迎使用小霸王聊天工作台</strong><p>请在左侧选择账号和聊天。WhatsApp 显示手机实际同步过来的近期消息和连接后的新消息（不保证完整历史）；Telegram 显示已授权监听记录。</p></div></section>
 <footer class="compose"><span title="附件尚未接入">＋</span><input type="text" placeholder="真实消息发送尚未启用，当前为只读模式" disabled aria-label="消息输入框，暂不可用"><button class="send" disabled>发送</button></footer>
 </main>
 <aside class="details" id="details">
@@ -224,7 +224,7 @@ async function loadThreads(preserve=false){
           id:t.jid,title:t.title,preview:t.preview,count:t.observedMessages,
           time:t.lastTime,kind:t.kind
         }));
-        showSide(threadData.length+' 个会话 · 仅连接后观察到的消息');
+        showSide(threadData.length+' 个会话 · 已同步消息与实时消息（可能不完整）');
       }catch(e){showSide('聊天读取失败：'+e.message)}
     } else showSide(online?.status==='paused'?'账号已保存但已暂停 · 点击＋重新连接':'账号尚未在线 · 点击＋查看连接状态');
   } else showSide(state.bridgeOnline?'点击＋开始连接 WhatsApp 账号':'WhatsApp 桥接未连通 · 请检查 3101 端口');
@@ -252,7 +252,7 @@ function renderThreads(){
 function showEmpty(){
   $('chatTitle').textContent='选择一个聊天';$('chatSubtitle').textContent='查看来自已授权账号的消息';$('chatAvatar').textContent='—';
   $('messages').replaceChildren();
-  const hint=child('div',undefined,'nochat');hint.append(child('div','▦','illustration'),child('strong','小霸王 · 统一聊天工作台'),child('p','从左侧选择会话。WhatsApp 不自动拉取全部历史记录，Telegram 显示已授权监听后保存的消息。'));$('messages').append(hint)
+  const hint=child('div',undefined,'nochat');hint.append(child('div','▦','illustration'),child('strong','小霸王 · 统一聊天工作台'),child('p','从左侧选择会话。WhatsApp 只显示已同步到本机的部分历史及新消息；Telegram 只显示已授权监听的消息。'));$('messages').append(hint)
 }
 async function loadMessages(){
   const current=chosen();if(!current){showEmpty();return}
@@ -265,7 +265,7 @@ async function loadMessages(){
     const result=await api(url);
     if(channel!==mode||account!==key||activeChat!==id)return;
     const host=$('messages');clearElement(host);
-    if(!result.messages.length){host.append(child('div', '当前没有可展示的消息。已连接不等于已同步历史记录。','nochat'));return}
+    if(!result.messages.length){host.append(child('div', '当前没有可展示的消息。等待 WhatsApp 同步或收到新消息后会显示。','nochat'));return}
     for(const item of result.messages){
       const isMine=Boolean(item.fromMe),bubble=child('div',undefined,'bubble'+(isMine?' mine':''));
       if(item.sender&&!isMine)bubble.append(child('div',item.sender,'sender'));
