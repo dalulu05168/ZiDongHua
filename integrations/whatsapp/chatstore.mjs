@@ -45,10 +45,15 @@ export function createChatStore({maxChats=500, maxMessages=150}={}) {
       sender: String(item.key.participant || participantName || '').slice(0,120),
       timestamp: stamp(item.messageTimestamp),
     };
-    chat.messages.push(record);
+    // History sync can arrive newest-first. Keep conversations chronological,
+    // otherwise the chat list preview can incorrectly show an old message.
+    const index=chat.messages.findIndex(m=>m.timestamp>record.timestamp);
+    if(index<0)chat.messages.push(record);
+    else chat.messages.splice(index,0,record);
     chat.ids.add(id);
-    if (chat.messages.length > maxMessages) {
-      const removed=chat.messages.shift();chat.ids.delete(removed.id);
+    while(chat.messages.length>maxMessages){
+      const removed=chat.messages.shift();
+      chat.ids.delete(removed.id);
     }
     chat.lastTime=Math.max(chat.lastTime, record.timestamp);
     chats.set(jid,chat);
@@ -59,6 +64,21 @@ export function createChatStore({maxChats=500, maxMessages=150}={}) {
     const chat=chats.get(jid) || {jid,title:jid.split('@')[0],messages:[],ids:new Set(),lastTime:0};
     chat.title=title.slice(0,120)||chat.title;
     chats.set(jid,chat);
+  }
+  function ingestHistory(batch,{maxBatchMessages=3000}={}){
+    // Only a bounded, local, in-memory projection; never persist message bodies.
+    const historicalChats=Array.isArray(batch?.chats)?batch.chats:[];
+    const historicalMessages=Array.isArray(batch?.messages)?batch.messages:[];
+    let added=0;
+    for(const chat of historicalChats.slice(0,maxChats)){
+      if(chat&&typeof chat.id==='string')setTitle(chat.id,chat.name||chat.subject||chat.id.split('@')[0]);
+    }
+    // The WhatsApp history event usually supplies recent messages first.
+    // Limit processing to prevent one large initial sync from blocking the bridge.
+    for(const message of historicalMessages.slice(0,maxBatchMessages)){
+      if(seeMessage(message))added++;
+    }
+    return {added,limited:historicalMessages.length>maxBatchMessages};
   }
   function list() {
     return [...chats.values()].map(c=>({
@@ -71,5 +91,5 @@ export function createChatStore({maxChats=500, maxMessages=150}={}) {
     if (!validChatJid(jid)) return null;
     return chats.get(jid)?.messages.map(m=>({...m})) || [];
   }
-  return {seeMessage,setTitle,list,messages};
+  return {seeMessage,setTitle,ingestHistory,list,messages};
 }
